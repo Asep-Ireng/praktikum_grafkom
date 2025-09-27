@@ -74,7 +74,36 @@ function main() {
 
   GL.useProgram(SHADER_PROGRAM);
 
-  // inside main(), after GL.useProgram(...)
+
+  function attachPadWithPivot(parent, padParams, color, attachPos, yawDeg, rollDeg, side) {
+  // side: +1 = right, -1 = left (controls body offset sign)
+  const padBody = createShoulderPad(GL, padParams, color);
+
+  // pivot at the attach point on the torso
+  const pivot = {
+    id: `padPivot_${side > 0 ? "R" : "L"}`,
+    mesh: null,
+    geom: null,
+    transform: makeTransform(attachPos[0], attachPos[1], attachPos[2]),
+    children: [padBody],
+  };
+
+  // shift the pad so its near end sits at the pivot
+  padBody.transform.position = [side * (padParams.padLen / 2), 0, 0];
+
+  // aim: yaw around Y (forward/back), roll around Z (up/down at far end)
+  pivot.transform.rotation = [
+    0,
+    LIBS.degToRad(yawDeg),   // + yaw points outward/forward (adjust)
+    LIBS.degToRad(rollDeg),  // negative rolls the far end downward
+  ];
+
+  // overall composite scale (length/thick/width) if needed
+  pivot.transform.scale = [1.0, 0.6, 1.0]; // your previous thickness squeeze
+
+  parent.children.push(pivot);
+  return { pivot, padBody };
+}
 function drawNode(node, parentMatrix) {
   // local TRS
   const mLocal = LIBS.get_I4();
@@ -120,16 +149,17 @@ function drawNode(node, parentMatrix) {
   // Torso: at origin
   const torsoT = {
     position: [0.0, 0.0, 0.0],
-    rotation: [0.0, 0.0, 0.0],
-    scale: [0.8, 1.1, 0.8],
+    rotation: [0.2, 0.0, 0.0],
+    scale: [1.15, 1.8, 1.1],
   };
 
   // Head: start above torso. Tweak these numbers by hand and reload.
   const headT = {
-    position: [0.0, torsoDims.b + -2.0 * headDims.b, -1.8],
+    position: [0.0, torsoDims.b + -2.5 * headDims.b, -1.6],
     rotation: [LIBS.degToRad(-8), 0.0, 0.0], // tilt a bit forward
-    scale: [1.4, 1.0, 1.2],
+    scale: [1.4, 1.6, 1.5],
   };
+ 
 
   // Colors
   const torsoColor = [0.15, 0.35, 0.85];
@@ -143,6 +173,41 @@ function drawNode(node, parentMatrix) {
     torsoDims.su,
     torsoDims.sv
   );
+  // 1) Squash only the bottom (under part) without touching the top
+squashStretchY(torsoGeo.vertices, torsoDims.b, {
+  kBottom: 0.10,    // 25% flatter at very bottom
+  kTop: -0.10,
+  power: 1.4,
+  preserveVolume: false
+});
+
+
+// 2) Make only the top taller without changing the bottom
+// (uncomment if you want additional top stretch)
+// squashStretchY(torsoGeo.vertices, torsoDims.b, {
+//   kTop: -0.30,     // +15% at top
+//   kBottom: 0.0,
+//   power: 1.2
+// });
+
+// Option A: raise the whole back (top and bottom) a bit
+//  stretchYByZ(torsoGeo.vertices, torsoDims.c, 
+//     { back: 0.30,
+//          power: 1.3, 
+//          preserveVolume: true });
+
+// Option B: make a back hump (top-only, leaves belly alone)
+stretchBackTopY(torsoGeo.vertices, torsoDims.b, torsoDims.c, {
+  k: 1.2,          // ~22% taller at extreme back-top
+  powerZ: 6.0,      // sharper near back end
+  powerY: 2.0,      // smoother from middle to top
+  preserveVolume: true
+});
+
+
+
+// 3) Optionally widen the top in X/Z without affecting bottom
+// taperXZ(torsoGeo.vertices, torsoDims.b, { top: 0.08, bottom: 0.0, power: 1.2 });
   overrideColor(torsoGeo.vertices, ...torsoColor);
   const torsoMesh = createMesh(GL, torsoGeo);
 
@@ -194,10 +259,69 @@ function drawNode(node, parentMatrix) {
   headNode.transform.rotation = headT.rotation.slice();
   headNode.transform.scale = headT.scale.slice();
 
-  // Make head a child of torso so it stays attached
-  torsoNode.children.push(headNode);
+// Orange color
+const orange = [0.95, 0.45, 0.15];
 
-  const rootNode = { id: "root", transform: makeTransform(), children: [torsoNode] };
+
+const ORANGE = [0.95, 0.45, 0.15];
+const padParams = {
+  padLen: 1.6,   // cylinder length
+  padRy: 0.55,   // thickness (Y radius)
+  padRz: 0.42,   // width (Z radius)
+  capAx: 0.55,   // half-ellipsoid length along X
+  capBy: 0.55,   // match thickness
+  capCz: 0.42    // match width
+};
+
+
+attachPadWithPivot(
+  torsoNode,
+  padParams,
+  ORANGE,
+  [-1.25, 0.55, -0.2], // left attach point
+  +120,                 // yaw: slight forward aim
+  +20,                 // roll: far end up a bit on left
+  -2.0                  // side = left
+);
+
+attachPadWithPivot(
+  torsoNode,
+  padParams,
+  ORANGE,
+  [ 1.25, 0.55, -0.2], // right attach point
+  -18,                 // yaw opposite
+  -12,                 // roll negative => far end down on right near head
+  +1                   // side = right
+);
+// 3) Root (head detached for now)
+  const rootNode = {
+  id: "root",
+  transform: makeTransform(),
+  children: [torsoNode, headNode], // head is now a sibling, not a child
+};
+
+
+  // Build the universal band once (works with any TRS you set above)
+// const bandGeo = generateBlendBandRobust(
+//   torsoDims, torsoT,
+//   headDims,  headT,
+//   { segments: 96, inflate: 0.012, color: torsoColor }
+// );
+// const bandMesh = createMesh(GL, bandGeo);
+// const bandNode = {
+//   id: "fuseBand",
+//   mesh: bandMesh,
+//   geom: { type: "blendBand" },
+//   transform: makeTransform(0,0,0),
+//   children: []
+// };
+// rootNode.children.push(bandNode);
+
+  // Make head a child of torso so it stays attached
+  //torsoNode.children.push(headNode);
+
+   //const rootNode = { id: "root", transform: makeTransform(), children: [torsoNode] };
+
 
   // ============== CAMERA / MOUSE ORBIT ONLY ==============
   var PROJMATRIX = LIBS.get_projection(
@@ -531,3 +655,842 @@ function loadPrefab(gl, key) {
 
 //     GL.bindBuffer(GL.ELEMENT_ARRAY_BUFFER, OBJECT_FACES);
 //     GL.drawElements(GL.TRIANGLES, object_faces.length, GL.UNSIGNED_SHORT, 0);
+
+// y-based squash/stretch along local Y
+function squashStretchY(interleaved, b, opts = {}) {
+  const kTop = opts.kTop ?? 0.0;     // +0.2 => +20% at the very top only
+  const kBottom = opts.kBottom ?? 0; // +0.2 => -20% at the very bottom only
+  const power = opts.power ?? 1.0;   // >1 makes the effect concentrate near tips
+  const preserveVolume = opts.preserveVolume ?? false;
+
+  for (let i = 0; i < interleaved.length; i += 6) {
+    const x = interleaved[i];
+    const y = interleaved[i + 1];
+    const z = interleaved[i + 2];
+
+    const t = Math.max(-1, Math.min(1, y / b)); // normalize to [-1, 1]
+    const wTop = t > 0 ? Math.pow(t, power) : 0;
+    const wBot = t < 0 ? Math.pow(-t, power) : 0;
+
+    const sy = 1 + kTop * wTop - kBottom * wBot; // top stretches, bottom squashes
+    let sx = 1,
+      sz = 1;
+    if (preserveVolume) {
+      const v = 1 / Math.sqrt(Math.max(0.0001, sy)); // crude volume comp
+      sx = v;
+      sz = v;
+    }
+
+    interleaved[i] = x * sx;
+    interleaved[i + 1] = y * sy;
+    interleaved[i + 2] = z * sz;
+  }
+}
+
+// optional: taper XZ (make top/bottom wider/narrower) without changing Y
+function taperXZ(interleaved, b, opts = {}) {
+  const top = opts.top ?? 0.0;       // +0.1 => +10% wider at top
+  const bottom = opts.bottom ?? 0.0; // +0.1 => +10% wider at bottom
+  const power = opts.power ?? 1.0;
+
+  for (let i = 0; i < interleaved.length; i += 6) {
+    const y = interleaved[i + 1];
+    const t = Math.max(-1, Math.min(1, y / b));
+    const wTop = t > 0 ? Math.pow(t, power) : 0;
+    const wBot = t < 0 ? Math.pow(-t, power) : 0;
+    const s = 1 + top * wTop + bottom * wBot;
+
+    interleaved[i] *= s;     // X
+    interleaved[i + 2] *= s; // Z
+  }
+}
+
+// Stretch Y based on Z position (back/front). Works on interleaved [x,y,z,r,g,b].
+function stretchYByZ(interleaved, c, opts = {}) {
+  const back = opts.back ?? 0.0;     // +0.2 => +20% taller at the very back (z = +c)
+  const front = opts.front ?? 0.0;   // +0.2 => +20% taller at the very front (z = -c)
+  const power = opts.power ?? 1.0;   // falloff sharpness
+  const preserveVolume = opts.preserveVolume ?? false;
+
+  for (let i = 0; i < interleaved.length; i += 6) {
+    const x = interleaved[i + 0];
+    const y = interleaved[i + 1];
+    const z = interleaved[i + 2];
+
+    const zn = Math.max(-1, Math.min(1, z / c)); // [-1 .. 1]
+    const wBack = zn > 0 ? Math.pow(zn, power) : 0;
+    const wFront = zn < 0 ? Math.pow(-zn, power) : 0;
+
+    const sy = 1 + back * wBack + front * wFront;
+
+    let sx = 1, sz = 1;
+    if (preserveVolume) {
+      const v = 1 / Math.sqrt(Math.max(0.0001, sy));
+      sx = v; sz = v;
+    }
+
+    interleaved[i + 0] = x * sx;
+    interleaved[i + 1] = y * sy;
+    interleaved[i + 2] = z * sz;
+  }
+}
+
+// Stretch only the TOP half, and only toward the back
+function stretchBackTopY(interleaved, b, c, opts = {}) {
+  const k = opts.k ?? 0.2;           // amount at very back-top
+  const powerZ = opts.powerZ ?? 1.4; // back falloff sharpness
+  const powerY = opts.powerY ?? 1.2; // top falloff sharpness
+  const preserveVolume = opts.preserveVolume ?? false;
+
+  for (let i = 0; i < interleaved.length; i += 6) {
+    const x = interleaved[i + 0];
+    const y = interleaved[i + 1];
+    const z = interleaved[i + 2];
+
+    const zn = Math.max(-1, Math.min(1, z / c)); // back = +1 (assuming head at negative Z)
+    const yn = Math.max(-1, Math.min(1, y / b)); // top = +1
+    const wZ = zn > 0 ? Math.pow(zn, powerZ) : 0; // only back
+    const wY = yn > 0 ? Math.pow(yn, powerY) : 0; // only top
+    const sy = 1 + k * (wZ * wY);
+
+    let sx = 1, sz = 1;
+    if (preserveVolume) {
+      const v = 1 / Math.sqrt(Math.max(0.0001, sy));
+      sx = v; sz = v;
+    }
+
+    interleaved[i + 0] = x * sx;
+    interleaved[i + 1] = y * sy;
+    interleaved[i + 2] = z * sz;
+  }
+}
+
+
+
+// apply TRS (same order as drawNode: S -> Rx -> Ry -> Rz -> T)
+function transformPointTRS(p, T) {
+  let x = p[0] * T.scale[0];
+  let y = p[1] * T.scale[1];
+  let z = p[2] * T.scale[2];
+
+  // Rx
+  const cx = Math.cos(T.rotation[0]), sx = Math.sin(T.rotation[0]);
+  let y1 = y * cx - z * sx;
+  let z1 = y * sx + z * cx;
+  y = y1; z = z1;
+
+  // Ry
+  const cy = Math.cos(T.rotation[1]), sy = Math.sin(T.rotation[1]);
+  let x2 = x * cy + z * sy;
+  let z2 = -x * sy + z * cy;
+  x = x2; z = z2;
+
+  // Rz
+  const cz = Math.cos(T.rotation[2]), sz = Math.sin(T.rotation[2]);
+  let x3 = x * cz - y * sz;
+  let y3 = x * sz + y * cz;
+  x = x3; y = y3;
+
+  // T
+  x += T.position[0];
+  y += T.position[1];
+  z += T.position[2];
+  return [x, y, z];
+}
+
+// ellipse radii of an ellipsoid slice at z0 (in that ellipsoid's local space)
+function sliceRadiiAtZ(a, b, c, z0) {
+  const t = 1 - (z0 * z0) / (c * c);
+  const s = t > 0 ? Math.sqrt(t) : 0;
+  return [a * s, b * s];
+}
+
+// Build a band bridging a torso slice at zTorso and a head slice at zHead
+function generateBlendBand(torsoDims, torsoT, headDims, headT, opts = {}) {
+  const seg = opts.segments ?? 64;
+  const zTorso = opts.zTorso ?? -0.9; // front side of torso (head is at -Z)
+  const zHead = opts.zHead ?? +0.5;   // back side of head (toward torso)
+  const color = opts.color ?? [0.15, 0.35, 0.85];
+
+  const verts = [];
+  const faces = [];
+
+  // precompute radii
+  const [rtx, rty] = sliceRadiiAtZ(
+    torsoDims.a, torsoDims.b, torsoDims.c, zTorso
+  );
+  const [rhx, rhy] = sliceRadiiAtZ(
+    headDims.a, headDims.b, headDims.c, zHead
+  );
+
+  // two rings: ring 0 = torso, ring 1 = head
+  const ringTorso = [];
+  const ringHead = [];
+
+  for (let i = 0; i <= seg; i++) {
+    const u = (i / seg) * 2 * Math.PI;
+    const cu = Math.cos(u), su = Math.sin(u);
+
+    // torso local point on slice
+    const ptT = [rtx * cu, rty * su, zTorso];
+    // head local point on slice (its back side)
+    const ptH = [rhx * cu, rhy * su, zHead];
+
+    // to world (root) via TRS
+    const pTw = transformPointTRS(ptT, torsoT);
+    const pHw = transformPointTRS(ptH, headT);
+
+    ringTorso.push(pTw);
+    ringHead.push(pHw);
+  }
+
+  // interleave as one vertex array: first torso ring, then head ring
+  for (let i = 0; i <= seg; i++) {
+    const p = ringTorso[i];
+    verts.push(p[0], p[1], p[2], color[0], color[1], color[2]);
+  }
+  const offsetHead = verts.length / 6;
+  for (let i = 0; i <= seg; i++) {
+    const p = ringHead[i];
+    verts.push(p[0], p[1], p[2], color[0], color[1], color[2]);
+  }
+
+  // connect quads between the two rings
+  for (let i = 0; i < seg; i++) {
+    const a = i;
+    const b = i + 1;
+    const c = offsetHead + i;
+    const d = offsetHead + i + 1;
+    // two triangles: a-b-d and a-d-c
+    faces.push(a, b, d, a, d, c);
+  }
+
+  return { vertices: verts, faces };
+}
+
+// ---------- TRS helpers (inverse) ----------
+function worldToLocalPoint(pw, T) {
+  // subtract translation
+  let x = pw[0] - T.position[0];
+  let y = pw[1] - T.position[1];
+  let z = pw[2] - T.position[2];
+  // inverse Rz, Ry, Rx (reverse order of application)
+  const cz = Math.cos(-T.rotation[2]),
+    sz = Math.sin(-T.rotation[2]);
+  let x1 = x * cz - y * sz,
+    y1 = x * sz + y * cz;
+  x = x1;
+  y = y1;
+
+  const cy = Math.cos(-T.rotation[1]),
+    sy = Math.sin(-T.rotation[1]);
+  let x2 = x * cy + z * sy,
+    z2 = -x * sy + z * cy;
+  x = x2;
+  z = z2;
+
+  const cx = Math.cos(-T.rotation[0]),
+    sx = Math.sin(-T.rotation[0]);
+  let y3 = y * cx - z * sx,
+    z3 = y * sx + z * cx;
+  y = y3;
+  z = z3;
+
+  // inverse scale
+  return [x / T.scale[0], y / T.scale[1], z / T.scale[2]];
+}
+
+function worldToLocalDir(dw, T) {
+  // directions ignore translation; apply inverse Rz,Ry,Rx and inv scale
+  let x = dw[0],
+    y = dw[1],
+    z = dw[2];
+
+  const cz = Math.cos(-T.rotation[2]),
+    sz = Math.sin(-T.rotation[2]);
+  let x1 = x * cz - y * sz,
+    y1 = x * sz + y * cz;
+  x = x1;
+  y = y1;
+
+  const cy = Math.cos(-T.rotation[1]),
+    sy = Math.sin(-T.rotation[1]);
+  let x2 = x * cy + z * sy,
+    z2 = -x * sy + z * cy;
+  x = x2;
+  z = z2;
+
+  const cx = Math.cos(-T.rotation[0]),
+    sx = Math.sin(-T.rotation[0]);
+  let y3 = y * cx - z * sx,
+    z3 = y * sx + z * cx;
+  y = y3;
+  z = z3;
+
+  return [x / T.scale[0], y / T.scale[1], z / T.scale[2]];
+}
+
+// line–ellipsoid intersection in LOCAL space of that ellipsoid
+// Ellipsoid: (x/a)^2 + (y/b)^2 + (z/c)^2 = 1
+// Ray: p(t) = p0 + t * v
+function intersectRayEllipsoidLocal(p0, v, a, b, c) {
+  const A =
+    (v[0] * v[0]) / (a * a) +
+    (v[1] * v[1]) / (b * b) +
+    (v[2] * v[2]) / (c * c);
+  const B =
+    (2 * p0[0] * v[0]) / (a * a) +
+    (2 * p0[1] * v[1]) / (b * b) +
+    (2 * p0[2] * v[2]) / (c * c);
+  const C =
+    (p0[0] * p0[0]) / (a * a) +
+    (p0[1] * p0[1]) / (b * b) +
+    (p0[2] * p0[2]) / (c * c) -
+    1.0;
+
+  const disc = B * B - 4 * A * C;
+  if (disc < 0) return null;
+  const sd = Math.sqrt(Math.max(0, disc));
+  const t1 = (-B - sd) / (2 * A);
+  const t2 = (-B + sd) / (2 * A);
+  // we want the intersection nearest to the ray origin (|t| minimum, prefer t>0)
+  let cand = [];
+  if (Number.isFinite(t1)) cand.push(t1);
+  if (Number.isFinite(t2)) cand.push(t2);
+  if (cand.length === 0) return null;
+  // pick smallest positive; if none positive, pick the one with minimal |t|
+  const pos = cand.filter((t) => t > 0).sort((a, b) => a - b);
+  if (pos.length > 0) return pos[0];
+  cand.sort((a, b) => Math.abs(a) - Math.abs(b));
+  return cand[0];
+}
+
+function normalize(v) {
+  const m = Math.hypot(v[0], v[1], v[2]) || 1;
+  return [v[0] / m, v[1] / m, v[2] / m];
+}
+function add(a, b) {
+  return [a[0] + b[0], a[1] + b[1], a[2] + b[2]];
+}
+function sub(a, b) {
+  return [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
+}
+function scale(v, s) {
+  return [v[0] * s, v[1] * s, v[2] * s];
+}
+function dot(a, b) {
+  return a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+}
+function cross(a, b) {
+  return [
+    a[1] * b[2] - a[2] * b[1],
+    a[2] * b[0] - a[0] * b[2],
+    a[0] * b[1] - a[1] * b[0],
+  ];
+}
+
+// Orthonormal basis for plane with normal n
+function planeBasis(n) {
+  const nN = normalize(n);
+  const tmp = Math.abs(nN[1]) < 0.99 ? [0, 1, 0] : [1, 0, 0];
+  const u = normalize(cross(nN, tmp));
+  const v = normalize(cross(nN, u));
+  return { n: nN, u, v };
+}
+
+// Auto-seam: find centers, seam normal, and a mid plane origin
+function seamPlane(torsoDims, torsoT, headDims, headT) {
+  const CT = torsoT.position;
+  const CH = headT.position;
+  const n = normalize(sub(CH, CT)); // points from torso -> head
+
+  // find surface points along the center-to-center line
+  // torso side
+  const p0T_local = [0, 0, 0];
+  const vT_local = worldToLocalDir(n, torsoT);
+  const tT = intersectRayEllipsoidLocal(
+    p0T_local,
+    vT_local,
+    torsoDims.a,
+    torsoDims.b,
+    torsoDims.c
+  );
+  // world point: pos + RS * (v_local * t)
+  const pT_world = add(
+    torsoT.position,
+    (function () {
+      // rebuild RS*(v_local*t) using forward rotations/scales
+      let x = vT_local[0] * tT * torsoT.scale[0];
+      let y = vT_local[1] * tT * torsoT.scale[1];
+      let z = vT_local[2] * tT * torsoT.scale[2];
+      // Rx
+      const cx = Math.cos(torsoT.rotation[0]),
+        sx = Math.sin(torsoT.rotation[0]);
+      let y1 = y * cx - z * sx,
+        z1 = y * sx + z * cx;
+      y = y1;
+      z = z1;
+      // Ry
+      const cy = Math.cos(torsoT.rotation[1]),
+        sy = Math.sin(torsoT.rotation[1]);
+      let x2 = x * cy + z * sy,
+        z2 = -x * sy + z * cy;
+      x = x2;
+      z = z2;
+      // Rz
+      const cz = Math.cos(torsoT.rotation[2]),
+        sz = Math.sin(torsoT.rotation[2]);
+      let x3 = x * cz - y * sz,
+        y3 = x * sz + y * cz;
+      x = x3;
+      y = y3;
+      return [x, y, z];
+    })()
+  );
+
+  // head side (opposite direction)
+  const vH_world = scale(n, -1);
+  const p0H_local = [0, 0, 0];
+  const vH_local = worldToLocalDir(vH_world, headT);
+  const tH = intersectRayEllipsoidLocal(
+    p0H_local,
+    vH_local,
+    headDims.a,
+    headDims.b,
+    headDims.c
+  );
+  const pH_world = add(
+    headT.position,
+    (function () {
+      let x = vH_local[0] * tH * headT.scale[0];
+      let y = vH_local[1] * tH * headT.scale[1];
+      let z = vH_local[2] * tH * headT.scale[2];
+      const cx = Math.cos(headT.rotation[0]),
+        sx = Math.sin(headT.rotation[0]);
+      let y1 = y * cx - z * sx,
+        z1 = y * sx + z * cx;
+      y = y1;
+      z = z1;
+      const cy = Math.cos(headT.rotation[1]),
+        sy = Math.sin(headT.rotation[1]);
+      let x2 = x * cy + z * sy,
+        z2 = -x * sy + z * cy;
+      x = x2;
+      z = z2;
+      const cz = Math.cos(headT.rotation[2]),
+        sz = Math.sin(headT.rotation[2]);
+      let x3 = x * cz - y * sz,
+        y3 = x * sz + y * cz;
+      x = x3;
+      y = y3;
+      return [x, y, z];
+    })()
+  );
+
+  const O = scale(add(pT_world, pH_world), 0.5); // plane origin midway
+  return { O, n };
+}
+
+// Ray-plane-based intersection with transformed ellipsoid
+function intersectFromPlanePoint(O, s, dims, T) {
+  // transform O, s to local of this ellipsoid
+  const p0 = worldToLocalPoint(O, T);
+  const v = worldToLocalDir(s, T);
+  const t = intersectRayEllipsoidLocal(p0, v, dims.a, dims.b, dims.c);
+  if (t == null) return null;
+  // world point = O + s * t_world; BUT t is in local param.
+  // Safer: compute local point and transform forward.
+  const pl = [p0[0] + v[0] * t, p0[1] + v[1] * t, p0[2] + v[2] * t];
+  return transformPointTRS(pl, T);
+}
+
+// Generic, transform-agnostic blend band
+function generateBlendBandUniversal(
+  torsoDims,
+  torsoT,
+  headDims,
+  headT,
+  opts = {}
+) {
+  const seg = opts.segments ?? 96;
+  const inflate = opts.inflate ?? 0.01; // push out to avoid z-fighting
+  const color = opts.color ?? [0.15, 0.35, 0.85];
+
+  const { O, n } = seamPlane(torsoDims, torsoT, headDims, headT);
+  const { u, v } = planeBasis(n);
+
+  const verts = [];
+  const faces = [];
+
+  const ringT = [];
+  const ringH = [];
+
+  for (let i = 0; i <= seg; i++) {
+    const phi = (i / seg) * 2 * Math.PI;
+    const s = normalize(
+      add(scale(u, Math.cos(phi)), scale(v, Math.sin(phi)))
+    );
+
+    const pT = intersectFromPlanePoint(O, s, torsoDims, torsoT);
+    const pH = intersectFromPlanePoint(O, s, headDims, headT);
+    if (!pT || !pH) {
+      // fallback: duplicate previous to keep indexing valid
+      const lastT = ringT.length ? ringT[ringT.length - 1] : O;
+      const lastH = ringH.length ? ringH[ringH.length - 1] : O;
+      ringT.push(lastT);
+      ringH.push(lastH);
+      continue;
+    }
+
+    // inflate outward from O along s to avoid z-fighting
+    ringT.push(add(pT, scale(s, inflate)));
+    ringH.push(add(pH, scale(s, inflate)));
+  }
+
+  for (let i = 0; i <= seg; i++) {
+    const p = ringT[i];
+    verts.push(p[0], p[1], p[2], color[0], color[1], color[2]);
+  }
+  const offH = verts.length / 6;
+  for (let i = 0; i <= seg; i++) {
+    const p = ringH[i];
+    verts.push(p[0], p[1], p[2], color[0], color[1], color[2]);
+  }
+
+  for (let i = 0; i < seg; i++) {
+    const a = i;
+    const b = i + 1;
+    const c = offH + i;
+    const d = offH + i + 1;
+    faces.push(a, b, d, a, d, c);
+  }
+
+  return { vertices: verts, faces };
+}
+
+function normalize(v){const m=Math.hypot(v[0],v[1],v[2])||1;return [v[0]/m,v[1]/m,v[2]/m];}
+function add(a,b){return [a[0]+b[0],a[1]+b[1],a[2]+b[2]];}
+function sub(a,b){return [a[0]-b[0],a[1]-b[1],a[2]-b[2]];}
+function scale(v,s){return [v[0]*s,v[1]*s,v[2]*s];}
+function cross(a,b){return [a[1]*b[2]-a[2]*b[1],a[2]*b[0]-a[0]*b[2],a[0]*b[1]-a[1]*b[0]];}
+function planeBasis(n){const nn=normalize(n);const tmp=Math.abs(nn[1])<0.99?[0,1,0]:[1,0,0];const u=normalize(cross(nn,tmp));const v=normalize(cross(nn,u));return {n:nn,u,v};}
+
+// forward dir (RS only)
+function transformDirTRS(d,T){
+  let x=d[0]*T.scale[0], y=d[1]*T.scale[1], z=d[2]*T.scale[2];
+  const cx=Math.cos(T.rotation[0]), sx=Math.sin(T.rotation[0]);
+  let y1=y*cx - z*sx, z1=y*sx + z*cx; y=y1; z=z1;
+  const cy=Math.cos(T.rotation[1]), sy=Math.sin(T.rotation[1]);
+  let x2=x*cy + z*sy, z2=-x*sy + z*cy; x=x2; z=z2;
+  const cz=Math.cos(T.rotation[2]), sz=Math.sin(T.rotation[2]);
+  let x3=x*cz - y*sz, y3=x*sz + y*cz; x=x3; y=y3;
+  return [x,y,z];
+}
+
+// inverse TRS
+function worldToLocalPoint(pw,T){
+  let x=pw[0]-T.position[0], y=pw[1]-T.position[1], z=pw[2]-T.position[2];
+  const cz=Math.cos(-T.rotation[2]), sz=Math.sin(-T.rotation[2]);
+  let x1=x*cz - y*sz, y1=x*sz + y*cz; x=x1; y=y1;
+  const cy=Math.cos(-T.rotation[1]), sy=Math.sin(-T.rotation[1]);
+  let x2=x*cy + z*sy, z2=-x*sy + z*cy; x=x2; z=z2;
+  const cx=Math.cos(-T.rotation[0]), sx=Math.sin(-T.rotation[0]);
+  let y3=y*cx - z*sx, z3=y*sx + z*cx; y=y3; z=z3;
+  return [x/T.scale[0], y/T.scale[1], z/T.scale[2]];
+}
+function worldToLocalDir(dw,T){
+  let x=dw[0], y=dw[1], z=dw[2];
+  const cz=Math.cos(-T.rotation[2]), sz=Math.sin(-T.rotation[2]);
+  let x1=x*cz - y*sz, y1=x*sz + y*cz; x=x1; y=y1;
+  const cy=Math.cos(-T.rotation[1]), sy=Math.sin(-T.rotation[1]);
+  let x2=x*cy + z*sy, z2=-x*sy + z*cy; x=x2; z=z2;
+  const cx=Math.cos(-T.rotation[0]), sx=Math.sin(-T.rotation[0]);
+  let y3=y*cx - z*sx, z3=y*sx + z*cx; y=y3; z=z3;
+  return [x/T.scale[0], y/T.scale[1], z/T.scale[2]];
+}
+
+function transformPointTRS(p,T){
+  let x=p[0]*T.scale[0], y=p[1]*T.scale[1], z=p[2]*T.scale[2];
+  const cx=Math.cos(T.rotation[0]), sx=Math.sin(T.rotation[0]);
+  let y1=y*cx - z*sx, z1=y*sx + z*cx; y=y1; z=z1;
+  const cy=Math.cos(T.rotation[1]), sy=Math.sin(T.rotation[1]);
+  let x2=x*cy + z*sy, z2=-x*sy + z*cy; x=x2; z=z2;
+  const cz=Math.cos(T.rotation[2]), sz=Math.sin(T.rotation[2]);
+  let x3=x*cz - y*sz, y3=x*sz + y*cz; x=x3; y=y3;
+  return [x+T.position[0], y+T.position[1], z+T.position[2]];
+}
+
+// quadratic roots for ray–ellipsoid in local space
+function rayEllipsoidRoots(p0,v,a,b,c){
+  const A=(v[0]*v[0])/(a*a)+(v[1]*v[1])/(b*b)+(v[2]*v[2])/(c*c);
+  const B=2*((p0[0]*v[0])/(a*a)+(p0[1]*v[1])/(b*b)+(p0[2]*v[2])/(c*c));
+  const C=(p0[0]*p0[0])/(a*a)+(p0[1]*p0[1])/(b*b)+(p0[2]*p0[2])/(c*c)-1;
+  const D=B*B-4*A*C; if(D<0) return null;
+  const s=Math.sqrt(Math.max(0,D)); const t1=(-B-s)/(2*A); const t2=(-B+s)/(2*A);
+  return [t1,t2]; // usually symmetric about center when starting at ellipse center
+}
+
+// auto seam plane from center line
+function seamPlane(tDims, torsoT, hDims, headT) {
+  const CT = torsoT.position;
+  const CH = headT.position;
+  const n = normalize(sub(CH, CT)); // torso -> head
+
+  // torso side
+  const vT_local = worldToLocalDir(n, torsoT);
+  const rootsT = rayEllipsoidRoots([0, 0, 0], vT_local, tDims.a, tDims.b, tDims.c);
+  const tTor = rootsT ? Math.min(Math.abs(rootsT[0]), Math.abs(rootsT[1])) : 0;
+  const pT = transformPointTRS(
+    [vT_local[0] * tTor, vT_local[1] * tTor, vT_local[2] * tTor],
+    torsoT
+  );
+
+  // head side (opposite direction)
+  const vH_local = worldToLocalDir(scale(n, -1), headT);
+  const rootsH = rayEllipsoidRoots([0, 0, 0], vH_local, hDims.a, hDims.b, hDims.c);
+  const tHdr = rootsH ? Math.min(Math.abs(rootsH[0]), Math.abs(rootsH[1])) : 0;
+  const pH = transformPointTRS(
+    [vH_local[0] * tHdr, vH_local[1] * tHdr, vH_local[2] * tHdr],
+    headT
+  );
+
+  const O = scale(add(pT, pH), 0.5); // plane origin at the midpoint
+  return { O, n };
+}
+
+// robust ring of intersection between plane (O,n) and ellipsoid (dims,T)
+function ringOnPlaneEllipsoid(dims,T,O,n,segments){
+  // plane in local
+  let nL=worldToLocalDir(n,T); nL=normalize(nL);
+  const OL=worldToLocalPoint(O,T);
+  const dL = nL[0]*OL[0] + nL[1]*OL[1] + nL[2]*OL[2];
+
+  // ellipse center on plane: x0 = A^-1 n * (d / (n^T A^-1 n)), A^-1=diag(a^2,b^2,c^2)
+  const Ainvn=[dims.a*dims.a*nL[0], dims.b*dims.b*nL[1], dims.c*dims.c*nL[2]];
+  const denom = nL[0]*Ainvn[0] + nL[1]*Ainvn[1] + nL[2]*Ainvn[2] || 1;
+  const x0L = scale(Ainvn, dL/denom);
+
+  // in-plane basis in local
+  const tmp = Math.abs(nL[1])<0.99 ? [0,1,0] : [1,0,0];
+  const uL = normalize(cross(nL,tmp));
+  const vL = normalize(cross(nL,uL));
+
+  const pts = [];
+  for(let i=0;i<=segments;i++){
+    const phi = (i/segments)*2*Math.PI;
+    let sL = normalize(add(scale(uL,Math.cos(phi)), scale(vL,Math.sin(phi))));
+    const roots = rayEllipsoidRoots(x0L, sL, dims.a, dims.b, dims.c);
+    if(!roots){ pts.push(transformPointTRS(x0L,T)); continue; }
+    // choose farther boundary from center |t| max
+    const t = Math.abs(roots[0]) > Math.abs(roots[1]) ? roots[0] : roots[1];
+    const pL = [x0L[0]+sL[0]*t, x0L[1]+sL[1]*t, x0L[2]+sL[2]*t];
+    pts.push(transformPointTRS(pL,T));
+  }
+  return pts;
+}
+
+function generateBlendBandRobust(tDims,tT,hDims,hT,opts={}){
+  const seg=opts.segments??96;
+  const inflate=opts.inflate??0.01;
+  const color=opts.color??[0.15,0.35,0.85];
+
+  const {O,n}=seamPlane(tDims,tT,hDims,hT);
+  const basis = planeBasis(n); // for inflate dir only
+
+  const ringT = ringOnPlaneEllipsoid(tDims,tT,O,n,seg);
+  const ringH = ringOnPlaneEllipsoid(hDims,hT,O,n,seg);
+
+  const verts=[]; const faces=[];
+  for(let i=0;i<=seg;i++){
+    const phi=(i/seg)*2*Math.PI;
+    const sW = normalize(add(scale(basis.u,Math.cos(phi)), scale(basis.v,Math.sin(phi))));
+    const p = add(ringT[i], scale(sW, inflate));
+    verts.push(p[0],p[1],p[2], color[0],color[1],color[2]);
+  }
+  const offH = verts.length/6;
+  for(let i=0;i<=seg;i++){
+    const phi=(i/seg)*2*Math.PI;
+    const sW = normalize(add(scale(basis.u,Math.cos(phi)), scale(basis.v,Math.sin(phi))));
+    const p = add(ringH[i], scale(sW, inflate));
+    verts.push(p[0],p[1],p[2], color[0],color[1],color[2]);
+  }
+  for(let i=0;i<seg;i++){
+    const a=i, b=i+1, c=offH+i, d=offH+i+1;
+    faces.push(a,b,d, a,d,c);
+  }
+  return {vertices:verts, faces};
+}
+
+// Frustum/cone (z from 0..h). rTop can be 0 for a sharp cone.
+function generateCone(rTop, rBottom, h, seg = 48) {
+  const verts = [], faces = [];
+  for (let i = 0; i <= seg; i++) {
+    const u = (i / seg) * 2 * Math.PI;
+    const cu = Math.cos(u), su = Math.sin(u);
+    // bottom ring (z=0)
+    verts.push(rBottom * cu, rBottom * su, 0, 1, 0.5, 0); // color placeholder
+    // top ring (z=h)
+    verts.push(rTop * cu, rTop * su, h, 1, 0.5, 0);
+  }
+  for (let i = 0; i < seg; i++) {
+    const a = 2 * i;
+    const b = a + 2;
+    const c = a + 1;
+    const d = b + 1;
+    faces.push(a, b, d, a, d, c); // side quad
+  }
+  // cap bottom (optional)
+  for (let i = 1; i < seg - 1; i++) faces.push(0, 2 * i, 2 * (i + 1));
+  // cap top if rTop > 0
+  if (rTop > 0) {
+    const base = 1;
+    for (let i = 1; i < seg - 1; i++) faces.push(base, 2 * (i + 1) + 1, 2 * i + 1);
+  }
+  return { vertices: verts, faces };
+}
+
+// Elliptical “pad” (just ellipsoid you already have) helper color override
+function tint(interleaved, r, g, b) {
+  for (let i = 0; i < interleaved.length; i += 6) {
+    interleaved[i + 3] = r; interleaved[i + 4] = g; interleaved[i + 5] = b;
+  }
+}
+
+
+// Ellipsoid half along X axis (side: +1 => x>=0, -1 => x<=0), open at x=0
+function generateEllipsoidHalfX(
+  a = 0.6,
+  b = 0.45,
+  c = 0.4,
+  stacks = 24,
+  sectorsHalf = 48,
+  side = +1
+) {
+  const vertices = [];
+  const faces = [];
+  // u in [-pi/2, pi/2] (latitude), v spans half circle in X
+  const vStart = side > 0 ? -Math.PI / 2 : Math.PI / 2;
+  const vEnd = side > 0 ? Math.PI / 2 : (3 * Math.PI) / 2;
+
+  for (let i = 0; i <= stacks; i++) {
+    const u = -Math.PI / 2 + (i / stacks) * Math.PI;
+    const cu = Math.cos(u);
+    const su = Math.sin(u);
+    for (let j = 0; j <= sectorsHalf; j++) {
+      const v = vStart + (j / sectorsHalf) * (vEnd - vStart);
+      const cv = Math.cos(v);
+      const sv = Math.sin(v);
+      const x = a * cv * cu;
+      const y = b * su;
+      const z = c * sv * cu;
+      // color placeholder; will tint later
+      vertices.push(x, y, z, 1, 0.5, 0.15);
+    }
+  }
+  const cols = sectorsHalf + 1;
+  for (let i = 0; i < stacks; i++) {
+    for (let j = 0; j < sectorsHalf; j++) {
+      const a0 = i * cols + j;
+      const a1 = a0 + 1;
+      const b0 = a0 + cols;
+      const b1 = b0 + 1;
+      faces.push(a0, a1, b1, a0, b1, b0);
+    }
+  }
+  return { vertices, faces };
+}
+
+// Cylinder along X (elliptical cross-section ry, rz), with end caps
+function generateCylinderX(ry = 0.45, rz = 0.35, len = 1.4, seg = 64, caps = true) {
+  const vertices = [];
+  const faces = [];
+  const x0 = -len / 2;
+  const x1 = +len / 2;
+
+  // side vertices: for each angle, two x-slices
+  for (let i = 0; i <= seg; i++) {
+    const t = (i / seg) * 2 * Math.PI;
+    const y = ry * Math.cos(t);
+    const z = rz * Math.sin(t);
+    // left ring (x0)
+    vertices.push(x0, y, z, 1, 0.5, 0.15);
+    // right ring (x1)
+    vertices.push(x1, y, z, 1, 0.5, 0.15);
+  }
+  // side indices
+  for (let i = 0; i < seg; i++) {
+    const a = 2 * i;
+    const b = a + 2;
+    const c = a + 1;
+    const d = b + 1;
+    faces.push(a, b, d, a, d, c);
+  }
+
+  if (caps) {
+    // centers
+    const idxCenterL = vertices.length / 6;
+    vertices.push(x0, 0, 0, 1, 0.5, 0.15);
+    const idxCenterR = idxCenterL + 1;
+    vertices.push(x1, 0, 0, 1, 0.5, 0.15);
+
+    // left cap
+    for (let i = 0; i < seg; i++) {
+      const a = 2 * i;
+      const b = 2 * ((i + 1) % seg);
+      faces.push(idxCenterL, b, a);
+    }
+    // right cap
+    for (let i = 0; i < seg; i++) {
+      const a = 2 * i + 1;
+      const b = 2 * ((i + 1) % seg) + 1;
+      faces.push(idxCenterR, a, b);
+    }
+  }
+  return { vertices, faces };
+}
+
+// color utility
+function tint(interleaved, r, g, b) {
+  for (let i = 0; i < interleaved.length; i += 6) {
+    interleaved[i + 3] = r;
+    interleaved[i + 4] = g;
+    interleaved[i + 5] = b;
+  }
+}
+
+
+function createShoulderPad(gl, params, color) {
+  const {
+    padLen, padRy, padRz,           // cylinder length and radii (Y,Z)
+    capAx, capBy, capCz,            // half-ellipsoid radii (X,Y,Z)
+    segCyl = 64, segEll = 48
+  } = params;
+
+  // geometry
+  const cylGeo = generateCylinderX(padRy, padRz, padLen, segCyl, true);
+  tint(cylGeo.vertices, ...color);
+  const capLGeo = generateEllipsoidHalfX(capAx, capBy, capCz, 24, segEll, -1);
+  tint(capLGeo.vertices, ...color);
+  const capRGeo = generateEllipsoidHalfX(capAx, capBy, capCz, 24, segEll, +1);
+  tint(capRGeo.vertices, ...color);
+
+  // meshes
+  const cylMesh  = createMesh(gl, cylGeo);
+  const capLMesh = createMesh(gl, capLGeo);
+  const capRMesh = createMesh(gl, capRGeo);
+
+  // nodes
+  const group = { id: "shoulderPad", mesh: null, geom: null,
+                  transform: makeTransform(0, 0, 0), children: [] };
+
+  const cylNode  = { id: "padCyl", mesh: cylMesh,  geom: null,
+                     transform: makeTransform(0, 0, 0), children: [] };
+  const capLNode = { id: "padCapL", mesh: capLMesh, geom: null,
+                     transform: makeTransform(-padLen / 2, 0, 0), children: [] };
+  const capRNode = { id: "padCapR", mesh: capRMesh, geom: null,
+                     transform: makeTransform( padLen / 2, 0, 0), children: [] };
+
+  group.children.push(cylNode, capLNode, capRNode);
+  return group;
+}
+
