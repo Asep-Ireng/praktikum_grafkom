@@ -97,17 +97,17 @@ function main() {
     ];
 
     // // THE MESH (replace the cube section)
-    // var hyper = generateHyperboloidOneSheet(0.3, 0.3, 0.3, 36, 72, 0.2);
+    var hyper = generateHyperboloidOneSheet(0.3, 0.3, 0.3, 36, 72, 0.2);
 
-    // // Interleaved: position(3) + color(3)
-    // var object_vertex = hyper.vertices;
-    // var object_faces = hyper.faces;
+    // Interleaved: position(3) + color(3)
+    var object_vertex = hyper.vertices;
+    var object_faces = hyper.faces;
 
-    // Generate a smaller ellipsoid
-    var ellipsoid = generateEllipsoid(0.5, 0.35, 0.6, 32, 64);
+    // Generate smaller ellipsoid
+    //var ellipsoid = generateEllipsoid(0.5, 0.35, 0.6, 32, 64);
 
-    var object_vertex = ellipsoid.vertices;
-    var object_faces = ellipsoid.faces;
+    //var object_vertex = ellipsoid.vertices;
+    //var object_faces = ellipsoid.faces;
 
     var OBJECT_VERTEX = GL.createBuffer();
     GL.bindBuffer(GL.ARRAY_BUFFER, OBJECT_VERTEX);

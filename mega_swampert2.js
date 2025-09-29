@@ -323,12 +323,215 @@ attachPadWithPivot(
   -12,                 // roll negative => far end down on right near head
   +1                   // side = right
 );
+
+
+  // ======= Extended model: limbs, tail, eyes, cheeks, beads =======
+  // We'll build forearms (big), 3-finger hands, hind legs, tail + fin,
+  // cheek patches, eyes and throat beads. All nodes follow the same
+  // node format used earlier: { id, mesh, geom, transform, children }.
+
+  // small helper: make an ellipsoid mesh with given radii and color
+  function makeEllipsoidNode(id, a,b,c, segU=32, segV=24, colorArr=[0.2,0.4,0.9]) {
+    const geo = generateEllipsoid(a,b,c, segU, segV);
+    overrideColor(geo.vertices, ...colorArr);
+    const mesh = createMesh(GL, geo);
+    return { id, mesh, geom: { type: "ellipsoid", params: {a,b,c}, color: colorArr }, transform: makeTransform(), children: [] };
+  }
+
+  // make a cylinder-x node (used for tail spine)
+  function makeCylinderXNode(id, ry, rz, len, seg=32, colorArr=[0.2,0.4,0.9]) {
+    const geo = generateCylinderX(ry, rz, len, seg, true);
+    overrideColor(geo.vertices, ...colorArr);
+    const mesh = createMesh(GL, geo);
+    return { id, mesh, geom: { type: "cylinderX", params: {ry,rz,len}, color: colorArr }, transform: makeTransform(), children: [] };
+  }
+
+  // make a cone (pointing +X) node
+  function makeConeXNode(id, baseR, tipR, len, seg=24, colorArr=[0.2,0.4,0.9]) {
+    const geo = generateCone(baseR, tipR, len, seg);
+    overrideColor(geo.vertices, ...colorArr);
+    const mesh = createMesh(GL, geo);
+    return { id, mesh, geom: { type: "cone", params: {baseR,tipR,len}, color: colorArr }, transform: makeTransform(), children: [] };
+  }
+
+  // Colors for details
+  const CHEEK = [0.95, 0.22, 0.28];    // red cheek patches
+  const BLACK = [0.06, 0.06, 0.06];
+  const UNDERSIDE = [Math.max(0, torsoColor[0]-0.06), Math.max(0, torsoColor[1]-0.08), Math.max(0, torsoColor[2]-0.1)];
+
+  // ---------------- Forearms + hands ----------------
+  // Attach points on torso: roughly in front-lower sides (tweak if needed)
+  const foreAttachL = [-1.0, -0.25, 0.6];
+  const foreAttachR = [ 1.0, -0.25, 0.6];
+
+  function buildForearm(side /* -1 left, +1 right */ , attach) {
+    // upper forearm (big)
+    const upper = makeEllipsoidNode(`upperArm_${side>0?'R':'L'}`, 0.45, 0.55, 0.48, 36, 24, torsoColor);
+    // lower forearm
+    const lower = makeEllipsoidNode(`lowerArm_${side>0?'R':'L'}`, 0.42, 0.5, 0.42, 36, 18, torsoColor);
+    // palm (slightly flattened)
+    const palm = makeEllipsoidNode(`palm_${side>0?'R':'L'}`, 0.36, 0.22, 0.48, 24, 18, torsoColor);
+
+    // fingers: 3 cones spread
+    const fingerLen = 0.6;
+    const fingerR = 0.14;
+    const fingers = [];
+    for (let i=0;i<3;i++) {
+      const f = makeConeXNode(`finger_${side>0?'R':'L'}_${i}`, fingerR*(1 - i*0.12), 0.02, fingerLen, 18, UNDERSIDE);
+      // tilt and spread a little; parented to palm
+      f.transform.rotation = [0, 0, LIBS.degToRad( (i-1)*12 * side )];
+      f.transform.position = [ side * (0.28 + i*0.03), 0.0, -0.06 + i*0.06 ];
+      // tip should point forward (+X) already by cone orientation
+      fingers.push(f);
+    }
+
+    // set transforms (local spaces)
+    upper.transform.position = [ side * 0.2, -0.05, 0.0 ];
+    upper.transform.rotation = [ LIBS.degToRad(-20), 0, 0 ];
+    lower.transform.position = [ side * 0.8, 0.0, 0.05 ];
+    lower.transform.rotation = [ LIBS.degToRad(-8), 0, 0 ];
+    palm.transform.position  = [ side * 1.25, 0.05, 0.0 ];
+    palm.transform.rotation  = [ LIBS.degToRad(0), 0, 0 ];
+
+    // wire them up: upper -> lower -> palm -> fingers
+    lower.children.push(palm);
+    fingers.forEach(f => palm.children.push(f));
+    upper.children.push(lower);
+
+    // create pivot at attachment point on torso
+    const pivot = { id: `forePivot_${side>0?'R':'L'}`, mesh: null, geom: null,
+                    transform: makeTransform(attach[0], attach[1], attach[2]),
+                    children: [upper] };
+
+    // rotate yaw slightly outward, pitch a bit to make arms rest on ground
+    pivot.transform.rotation = [ 0, LIBS.degToRad( side * 18 ), LIBS.degToRad(-10) ];
+    pivot.transform.scale = [1.05, 1.05, 1.05];
+
+    return pivot;
+  }
+
+  const foreL = buildForearm(-1, foreAttachL);
+  const foreR = buildForearm(+1, foreAttachR);
+
+  // ---------------- Hind legs ----------------
+  const hindAttachL = [-0.9, -1.15, -0.4]; // back-bottom sides
+  const hindAttachR = [ 0.9, -1.15, -0.4];
+
+  function buildHindLeg(side, attach) {
+    const thigh = makeEllipsoidNode(`thigh_${side>0?'R':'L'}`, 0.55, 0.65, 0.48, 36, 24, torsoColor);
+    const shin  = makeEllipsoidNode(`shin_${side>0?'R':'L'}`, 0.48, 0.45, 0.42, 36, 20, torsoColor);
+    const foot  = makeEllipsoidNode(`foot_${side>0?'R':'L'}`, 0.40, 0.28, 0.55, 28, 18, torsoColor);
+
+    // three toes as cones
+    const toes = [];
+    for (let i=0;i<3;i++) {
+      const t = makeConeXNode(`toe_${side>0?'R':'L'}_${i}`, 0.11, 0.02, 0.28, 18, UNDERSIDE);
+      t.transform.position = [ side * (0.32 + i*0.04), 0.0, -0.06 + i*0.06 ];
+      t.transform.rotation = [ LIBS.degToRad(-6), 0, LIBS.degToRad( (i-1)*8 * side ) ];
+      toes.push(t);
+    }
+
+    thigh.transform.position = [ side * -0.05, -0.2, -0.05 ];
+    thigh.transform.rotation = [ LIBS.degToRad(12), 0, 0 ];
+    shin.transform.position = [ side * 0.38, -0.35, 0.05 ];
+    shin.transform.rotation = [ LIBS.degToRad(-14), 0, 0 ];
+    foot.transform.position = [ side * 0.8, -0.55, 0.08 ];
+    foot.transform.rotation = [ LIBS.degToRad(-6), 0, 0 ];
+
+    toes.forEach(t => foot.children.push(t));
+    shin.children.push(foot);
+    thigh.children.push(shin);
+
+    const pivot = { id: `hindPivot_${side>0?'R':'L'}`, mesh: null, geom: null,
+                    transform: makeTransform(attach[0], attach[1], attach[2]),
+                    children: [thigh] };
+    pivot.transform.rotation = [0, LIBS.degToRad(side * -6), 0];
+
+    return pivot;
+  }
+
+  const hindL = buildHindLeg(-1, hindAttachL);
+  const hindR = buildHindLeg(+1, hindAttachR);
+
+  // ---------------- Tail + fin ----------------
+  // Tail spine as cylinder along +X, anchored at rear of torso
+  const tailLen = 2.2;
+  const tailSpine = makeCylinderXNode("tailSpine", 0.16, 0.12, tailLen, 48, torsoColor);
+  // tail fin (flat) — use ellipsoid half mirrored to make fin-like shape
+  const tailFinGeo = generateEllipsoidHalfX(0.08, 0.6, 0.9, 18, 24, +1);
+  overrideColor(tailFinGeo.vertices, ...headColor);
+  const tailFinMesh = createMesh(GL, tailFinGeo);
+  const tailFinNode = { id: "tailFin", mesh: tailFinMesh, geom: { type: "halfEllipsoid", params: {a:0.08,b:0.6,c:0.9}, color: headColor }, transform: makeTransform(tailLen/2, 0, 0), children: [] };
+
+  tailSpine.children.push(tailFinNode);
+  // pivot placement: back end of torso (tweak if necessary)
+  const tailPivot = { id: "tailPivot", mesh: null, geom: null,
+                      transform: makeTransform(0.0, -0.15, -torsoDims.c*0.9),
+                      children: [tailSpine] };
+  tailPivot.transform.rotation = [LIBS.degToRad(-6), 0, 0];
+
+  // ---------------- Head details: eyes, cheeks, beads ----------------
+  // eyes: small dark ellipsoids on face, parented to headNode
+  const eyeL = makeEllipsoidNode("eyeL", 0.06, 0.06, 0.03, 12, 8, BLACK);
+  eyeL.transform.position = [ -0.22, 0.08, 0.28 ];
+  eyeL.transform.rotation = [0, LIBS.degToRad(6), 0];
+
+  const eyeR = makeEllipsoidNode("eyeR", 0.06, 0.06, 0.03, 12, 8, BLACK);
+  eyeR.transform.position = [ -0.22, 0.08, -0.28 ];
+  eyeR.transform.rotation = [0, LIBS.degToRad(-6), 0];
+
+  // cheek patches (orange/red flat-ish ellipsoids)
+  const cheekL = makeEllipsoidNode("cheekL", 0.14, 0.08, 0.12, 18, 12, CHEEK);
+  cheekL.transform.position = [ 0.06, -0.06, 0.38 ];
+  cheekL.transform.rotation = [ LIBS.degToRad(-12), LIBS.degToRad(10), 0 ];
+  cheekL.transform.scale = [1.0, 0.7, 1.1];
+
+  const cheekR = makeEllipsoidNode("cheekR", 0.14, 0.08, 0.12, 18, 12, CHEEK);
+  cheekR.transform.position = [ 0.06, -0.06, -0.38 ];
+  cheekR.transform.rotation = [ LIBS.degToRad(-12), LIBS.degToRad(-10), 0 ];
+  cheekR.transform.scale = [1.0, 0.7, 1.1];
+
+  // throat beads: three small spheres under chin
+  const beadColor = [0.06, 0.06, 0.06];
+  const beadNodes = [];
+  for (let i=0;i<3;i++){
+    const b = makeEllipsoidNode(`bead${i}`, 0.06, 0.06, 0.06, 12, 10, beadColor);
+    b.transform.position = [ 0.02 + i*0.06, -0.18 - i*0.01, 0.0 ];
+    beadNodes.push(b);
+  }
+
+  // crest fins (red/orange) on head top — two elongated cones/ellipsoids
+  const crestL = makeEllipsoidNode("crestL", 0.08, 0.36, 0.02, 20, 10, ORANGE);
+  crestL.transform.position = [ -0.35, 0.38, 0.18 ];
+  crestL.transform.rotation = [ LIBS.degToRad(8), LIBS.degToRad(28), LIBS.degToRad(24) ];
+  crestL.transform.scale = [1.0, 1.2, 1.0];
+
+  const crestR = makeEllipsoidNode("crestR", 0.08, 0.36, 0.02, 20, 10, ORANGE);
+  crestR.transform.position = [ -0.35, 0.38, -0.18 ];
+  crestR.transform.rotation = [ LIBS.degToRad(8), LIBS.degToRad(-28), LIBS.degToRad(-24) ];
+  crestR.transform.scale = [1.0, 1.2, 1.0];
+
+  // attach head details as children of headNode
+  headNode.children.push(eyeL, eyeR, cheekL, cheekR, crestL, crestR);
+  beadNodes.forEach(b => headNode.children.push(b));
+
+  // ---------------- Final root and assembly ----------------
+
+
+
+
 // 3) Root (head detached for now)
   const rootNode = {
-  id: "root",
-  transform: makeTransform(),
-  children: [torsoNode,torsoNode2, headNode], // head is now a sibling, not a child
-};
+    id: "root",
+    transform: makeTransform(),
+    children: [ torsoNode, torsoNode2, headNode,
+                foreL, foreR, hindL, hindR, tailPivot ]
+  };
+
+  // slight global pose tweaks
+  foreL.transform.rotation = foreL.transform.rotation || [0,0,0];
+  foreR.transform.rotation = foreR.transform.rotation || [0,0,0];
+  tailPivot.transform.rotation = tailPivot.transform.rotation || [0,0,0];
 
 
   // Build the universal band once (works with any TRS you set above)
