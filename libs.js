@@ -1,16 +1,12 @@
-
 var LIBS = {
     degToRad: function (angle) {
         return (angle * Math.PI / 180);
     },
 
-
     get_projection: function (angle, a, zMin, zMax) {
         var tan = Math.tan(LIBS.degToRad(0.5 * angle)),
             A = -(zMax + zMin) / (zMax - zMin),
             B = (-2 * zMax * zMin) / (zMax - zMin);
-
-
         return [
             0.5 / tan, 0, 0, 0,
             0, 0.5 * a / tan, 0, 0,
@@ -19,22 +15,16 @@ var LIBS = {
         ];
     },
 
-
     get_I4: function () {
-        return [1, 0, 0, 0,
-            0, 1, 0, 0,
-            0, 0, 1, 0,
-            0, 0, 0, 1];
+        return [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1];
     },
-
 
     set_I4: function (m) {
         m[0] = 1, m[1] = 0, m[2] = 0, m[3] = 0,
-            m[4] = 0, m[5] = 1, m[6] = 0, m[7] = 0,
-            m[8] = 0, m[9] = 0, m[10] = 1, m[11] = 0,
-            m[12] = 0, m[13] = 0, m[14] = 0, m[15] = 1;
+        m[4] = 0, m[5] = 1, m[6] = 0, m[7] = 0,
+        m[8] = 0, m[9] = 0, m[10] = 1, m[11] = 0,
+        m[12] = 0, m[13] = 0, m[14] = 0, m[15] = 1;
     },
-
 
     rotateX: function (m, angle) {
         var c = Math.cos(angle);
@@ -43,13 +33,10 @@ var LIBS = {
         m[1] = m[1] * c - m[2] * s;
         m[5] = m[5] * c - m[6] * s;
         m[9] = m[9] * c - m[10] * s;
-
-
         m[2] = m[2] * c + mv1 * s;
         m[6] = m[6] * c + mv5 * s;
         m[10] = m[10] * c + mv9 * s;
     },
-
 
     rotateY: function (m, angle) {
         var c = Math.cos(angle);
@@ -58,13 +45,10 @@ var LIBS = {
         m[0] = c * m[0] + s * m[2];
         m[4] = c * m[4] + s * m[6];
         m[8] = c * m[8] + s * m[10];
-
-
         m[2] = c * m[2] - s * mv0;
         m[6] = c * m[6] - s * mv4;
         m[10] = c * m[10] - s * mv8;
     },
-
 
     rotateZ: function (m, angle) {
         var c = Math.cos(angle);
@@ -73,83 +57,67 @@ var LIBS = {
         m[0] = c * m[0] - s * m[1];
         m[4] = c * m[4] - s * m[5];
         m[8] = c * m[8] - s * m[9];
-
-
         m[1] = c * m[1] + s * mv0;
         m[5] = c * m[5] + s * mv4;
         m[9] = c * m[9] + s * mv8;
     },
 
+    translateX: function (m, t) { m[12] += t; },
+    translateY: function (m, t) { m[13] += t; },
+    translateZ: function (m, t) { m[14] += t; },
 
-    translateZ: function (m, t) {
-        m[14] += t;
+    mul: function(out, a, b) {
+        let a00 = a[0], a01 = a[1], a02 = a[2], a03 = a[3];
+        let a10 = a[4], a11 = a[5], a12 = a[6], a13 = a[7];
+        let a20 = a[8], a21 = a[9], a22 = a[10], a23 = a[11];
+        let a30 = a[12], a31 = a[13], a32 = a[14], a33 = a[15];
+
+        let b0  = b[0], b1  = b[1], b2  = b[2], b3  = b[3];
+        out[0] = b0*a00 + b1*a10 + b2*a20 + b3*a30;
+        out[1] = b0*a01 + b1*a11 + b2*a21 + b3*a31;
+        out[2] = b0*a02 + b1*a12 + b2*a22 + b3*a32;
+        out[3] = b0*a03 + b1*a13 + b2*a23 + b3*a33;
+
+        b0 = b[4]; b1 = b[5]; b2 = b[6]; b3 = b[7];
+        out[4] = b0*a00 + b1*a10 + b2*a20 + b3*a30;
+        out[5] = b0*a01 + b1*a11 + b2*a21 + b3*a31;
+        out[6] = b0*a02 + b1*a12 + b2*a22 + b3*a32;
+        out[7] = b0*a03 + b1*a13 + b2*a23 + b3*a33;
+
+        b0 = b[8]; b1 = b[9]; b2 = b[10]; b3 = b[11];
+        out[8] = b0*a00 + b1*a10 + b2*a20 + b3*a30;
+        out[9] = b0*a01 + b1*a11 + b2*a21 + b3*a31;
+        out[10] = b0*a02 + b1*a12 + b2*a22 + b3*a32;
+        out[11] = b0*a03 + b1*a13 + b2*a23 + b3*a33;
+
+        b0 = b[12]; b1 = b[13]; b2 = b[14]; b3 = b[15];
+        out[12] = b0*a00 + b1*a10 + b2*a20 + b3*a30;
+        out[13] = b0*a01 + b1*a11 + b2*a21 + b3*a31;
+        out[14] = b0*a02 + b1*a12 + b2*a22 + b3*a32;
+        out[15] = b0*a03 + b1*a13 + b2*a23 + b3*a33;
+        
+        return out;
     },
-    translateX: function (m, t) {
-        m[12] += t;
-    },
-    translateY: function (m, t) {
-        m[13] += t;
+
+    subtract: function(a, b) {
+        return [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
     },
 
-
-    set_position: function (m, x, y, z) {
-        m[12] = x, m[13] = y, m[14] = z;
+    cross: function(a, b) {
+        return [
+            a[1] * b[2] - a[2] * b[1],
+            a[2] * b[0] - a[0] * b[2],
+            a[0] * b[1] - a[1] * b[0]
+        ];
     },
 
-    translateLocal : function (m, x, y, z) {
-  m[12] += x * m[0] + y * m[4] + z * m[8];
-  m[13] += x * m[1] + y * m[5] + z * m[9];
-  m[14] += x * m[2] + y * m[6] + z * m[10];
-},
+    normalize: function(v) {
+        var len = Math.sqrt(v[0]*v[0] + v[1]*v[1] + v[2]*v[2]);
+        if (len > 0.00001) {
+            return [v[0]/len, v[1]/len, v[2]/len];
+        } else {
+            return [0,0,0];
+        }
+    }
 
-// column-major (OpenGL-style) mat4 multiply: out = a * b
-mul : function (out, a, b) {
-  const a0 = a[0],  a1 = a[1],  a2 = a[2],  a3 = a[3];
-  const a4 = a[4],  a5 = a[5],  a6 = a[6],  a7 = a[7];
-  const a8 = a[8],  a9 = a[9],  a10 = a[10], a11 = a[11];
-  const a12 = a[12], a13 = a[13], a14 = a[14], a15 = a[15];
-
-  const b0 = b[0],  b1 = b[1],  b2 = b[2],  b3 = b[3];
-  const b4 = b[4],  b5 = b[5],  b6 = b[6],  b7 = b[7];
-  const b8 = b[8],  b9 = b[9],  b10 = b[10], b11 = b[11];
-  const b12 = b[12], b13 = b[13], b14 = b[14], b15 = b[15];
-
-  out[0] = a0 * b0 + a4 * b1 + a8 * b2 + a12 * b3;
-  out[1] = a1 * b0 + a5 * b1 + a9 * b2 + a13 * b3;
-  out[2] = a2 * b0 + a6 * b1 + a10 * b2 + a14 * b3;
-  out[3] = a3 * b0 + a7 * b1 + a11 * b2 + a15 * b3;
-
-  out[4] = a0 * b4 + a4 * b5 + a8 * b6 + a12 * b7;
-  out[5] = a1 * b4 + a5 * b5 + a9 * b6 + a13 * b7;
-  out[6] = a2 * b4 + a6 * b5 + a10 * b6 + a14 * b7;
-  out[7] = a3 * b4 + a7 * b5 + a11 * b6 + a15 * b7;
-
-  out[8] = a0 * b8 + a4 * b9 + a8 * b10 + a12 * b11;
-  out[9] = a1 * b8 + a5 * b9 + a9 * b10 + a13 * b11;
-  out[10] = a2 * b8 + a6 * b9 + a10 * b10 + a14 * b11;
-  out[11] = a3 * b8 + a7 * b9 + a11 * b10 + a15 * b11;
-
-  out[12] = a0 * b12 + a4 * b13 + a8 * b14 + a12 * b15;
-  out[13] = a1 * b12 + a5 * b13 + a9 * b14 + a13 * b15;
-  out[14] = a2 * b12 + a6 * b13 + a10 * b14 + a14 * b15;
-  out[15] = a3 * b12 + a7 * b13 + a11 * b14 + a15 * b15;
-},
-
-scale : function (m, sx, sy, sz) {
-  m[0] *= sx;  m[1] *= sx;  m[2] *= sx;  m[3] *= sx;
-  m[4] *= sy;  m[5] *= sy;  m[6] *= sy;  m[7] *= sy;
-  m[8] *= sz;  m[9] *= sz;  m[10] *= sz; m[11] *= sz;
-},
-
-    composeTRS : function (t) {
-  const m = LIBS.get_I4();
-  // T then R then S (you can change order if needed)
-  LIBS.translateLocal(m, t.position[0], t.position[1], t.position[2]);
-  LIBS.rotateX(m, t.rotation[0]);
-  LIBS.rotateY(m, t.rotation[1]);
-  LIBS.rotateZ(m, t.rotation[2]);
-  LIBS.scale(m, t.scale[0], t.scale[1], t.scale[2]);
-  return m;
-},
 };
-
