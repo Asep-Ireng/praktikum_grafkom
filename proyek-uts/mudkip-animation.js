@@ -20,7 +20,7 @@ export class MudkipAnimation {
       anticipation3: 0.25,
       airborne3:     0.50,
       landing3:      0.20,
-      holdFinal:     1.0,  
+      holdFinal:     1.2,  
       
       pawRaise:  0.4,  
       pawHold:   0.3,   
@@ -52,6 +52,7 @@ export class MudkipAnimation {
       headStretch: 0,
       legCurls:   { fl: 0, fr: 0, bl: 0, br: 0 },
       pawRaise: { fl: 0, fr: 0, bl: 0, br: 0 },
+      eyeScale: 1.0,
     };
 
     this.phase = 'anticipation';
@@ -290,96 +291,114 @@ export class MudkipAnimation {
         const headEase = this.easeOutQuad(progress);
         this.animData.headTilt.x = 0;    
         } else if (this.phase === 'holdFinal') {
-        this.animData.bodyOffset.z = 0;
-        this.animData.bodyOffset.y = 0;
-        this.animData.headTilt.x = 0; 
+
+          const t = this.phaseTime;
+          
+          if (t < 0.2) {
+            this.animData.eyeScale = 1.0;
+            
+          } else if (t < 0.4) {
+            const p = (t - 0.2) / 0.2;
+            const ease = this.easeOutQuad(p);
+            this.animData.eyeScale = 1.0 + 0.3 * ease;
+            
+          } else if (t < 0.6) {
+            this.animData.eyeScale = 1.3;
+            
+          } else if (t < 1.0) {
+            const p = (t - 0.6) / 0.4;
+            const ease = this.easeInOutQuad(p);
+            this.animData.eyeScale = 1.3 - 0.3 * ease;
+            
+          } else {
+            this.animData.eyeScale = 1.0;
+          }
         } else if (this.phase === 'pawRaise') {
-  this.animData.bodyOffset.z = 0;
-  this.animData.bodyOffset.y = 0;
-  
-  const ease = this.easeInOutQuad(progress);
-  
+          this.animData.bodyOffset.z = 0;
+          this.animData.bodyOffset.y = 0;
+          
+          const ease = this.easeInOutQuad(progress);
+    
+          this.animData.headTilt.x = 0;
+          this.animData.headTilt.y = 0;
+          this.animData.headTilt.z = this.jump.headTiltSide * ease;
+          this.animData.pawRaise.fl = 0;     
+          this.animData.pawRaise.fr = ease; 
+          this.animData.pawRaise.bl = 0;
+          this.animData.pawRaise.br = 0;
 
-  this.animData.headTilt.x = 0;
-  this.animData.headTilt.y = 0;
-  this.animData.headTilt.z = this.jump.headTiltSide * ease;
-  this.animData.pawRaise.fl = 0;     
-  this.animData.pawRaise.fr = ease; 
-  this.animData.pawRaise.bl = 0;
-  this.animData.pawRaise.br = 0;
+        } else if (this.phase === 'pawLower') {
+          this.animData.bodyOffset.z = 0;
+          this.animData.bodyOffset.y = 0;
+          
+          const easeDown = this.easeInOutQuad(progress);
+          this.animData.headTilt.x = 0;
+          this.animData.headTilt.y = 0;
+          this.animData.headTilt.z = this.jump.headTiltSide * (1 - easeDown); 
+          this.animData.pawRaise.fl = 0;
+          this.animData.pawRaise.fr = 1.0 - easeDown;  
+          this.animData.pawRaise.bl = 0;
+          this.animData.pawRaise.br = 0;
 
-} else if (this.phase === 'pawLower') {
-  this.animData.bodyOffset.z = 0;
-  this.animData.bodyOffset.y = 0;
-  
-  const easeDown = this.easeInOutQuad(progress);
-  this.animData.headTilt.x = 0;
-  this.animData.headTilt.y = 0;
-  this.animData.headTilt.z = this.jump.headTiltSide * (1 - easeDown); 
-  this.animData.pawRaise.fl = 0;
-  this.animData.pawRaise.fr = 1.0 - easeDown;  
-  this.animData.pawRaise.bl = 0;
-  this.animData.pawRaise.br = 0;
+        } else if (this.phase === 'pawHold') {
+          this.animData.bodyOffset.z = 0;
+          this.animData.bodyOffset.y = 0;
+          this.animData.headTilt.x = 0;
+          this.animData.headTilt.y = 0;
+          this.animData.headTilt.z = this.jump.headTiltSide; 
+          this.animData.pawRaise.fl = 0;
+          this.animData.pawRaise.fr = 1.0; 
+          this.animData.pawRaise.bl = 0;
+          this.animData.pawRaise.br = 0;
 
-} else if (this.phase === 'pawHold') {
-  this.animData.bodyOffset.z = 0;
-  this.animData.bodyOffset.y = 0;
-  this.animData.headTilt.x = 0;
-  this.animData.headTilt.y = 0;
-  this.animData.headTilt.z = this.jump.headTiltSide; 
-  this.animData.pawRaise.fl = 0;
-  this.animData.pawRaise.fr = 1.0; 
-  this.animData.pawRaise.bl = 0;
-  this.animData.pawRaise.br = 0;
+        } else if (this.phase === 'pawRaise2') {
+          this.animData.bodyOffset.z = 0;
+          this.animData.bodyOffset.y = 0;
+          const ease = this.easeInOutQuad(progress);
+          this.animData.headTilt.x = 0;
+          this.animData.headTilt.y = 0;
+          this.animData.headTilt.z = -this.jump.headTiltSide * ease; 
+          this.animData.pawRaise.fl = ease;  
+          this.animData.pawRaise.fr = 0;     
+          this.animData.pawRaise.bl = 0;
+          this.animData.pawRaise.br = 0;
+          
+        } else if (this.phase === 'pawHold2') {
+          this.animData.bodyOffset.z = 0;
+          this.animData.bodyOffset.y = 0;
+          this.animData.headTilt.x = 0;
+          this.animData.headTilt.y = 0;
+          this.animData.headTilt.z = -this.jump.headTiltSide;  
+          this.animData.pawRaise.fl = 1.0;  
+          this.animData.pawRaise.fr = 0;
+          this.animData.pawRaise.bl = 0;
+          this.animData.pawRaise.br = 0;
+          
+        } else if (this.phase === 'pawLower2') {
+          this.animData.bodyOffset.z = 0;
+          this.animData.bodyOffset.y = 0;
 
-} else if (this.phase === 'pawRaise2') {
-  this.animData.bodyOffset.z = 0;
-  this.animData.bodyOffset.y = 0;
-  const ease = this.easeInOutQuad(progress);
-  this.animData.headTilt.x = 0;
-  this.animData.headTilt.y = 0;
-  this.animData.headTilt.z = -this.jump.headTiltSide * ease; 
-  this.animData.pawRaise.fl = ease;  
-  this.animData.pawRaise.fr = 0;     
-  this.animData.pawRaise.bl = 0;
-  this.animData.pawRaise.br = 0;
-  
-} else if (this.phase === 'pawHold2') {
-  this.animData.bodyOffset.z = 0;
-  this.animData.bodyOffset.y = 0;
-  this.animData.headTilt.x = 0;
-  this.animData.headTilt.y = 0;
-  this.animData.headTilt.z = -this.jump.headTiltSide;  
-  this.animData.pawRaise.fl = 1.0;  
-  this.animData.pawRaise.fr = 0;
-  this.animData.pawRaise.bl = 0;
-  this.animData.pawRaise.br = 0;
-  
-} else if (this.phase === 'pawLower2') {
-  this.animData.bodyOffset.z = 0;
-  this.animData.bodyOffset.y = 0;
+          const easeDown = this.easeInOutQuad(progress);
+          this.animData.headTilt.x = 0;
+          this.animData.headTilt.y = 0;
+          this.animData.headTilt.z = -this.jump.headTiltSide * (1 - easeDown);  
+          this.animData.pawRaise.fl = 1.0 - easeDown;  
+          this.animData.pawRaise.fr = 0;
+          this.animData.pawRaise.bl = 0;
+          this.animData.pawRaise.br = 0;
 
-  const easeDown = this.easeInOutQuad(progress);
-  this.animData.headTilt.x = 0;
-  this.animData.headTilt.y = 0;
-  this.animData.headTilt.z = -this.jump.headTiltSide * (1 - easeDown);  
-  this.animData.pawRaise.fl = 1.0 - easeDown;  
-  this.animData.pawRaise.fr = 0;
-  this.animData.pawRaise.bl = 0;
-  this.animData.pawRaise.br = 0;
-
-} else if (this.phase === 'restHold') {
-  this.animData.bodyOffset.z = 0;
-  this.animData.bodyOffset.y = 0;
-  this.animData.headTilt.x = 0;
-  this.animData.headTilt.y = 0;
-  this.animData.headTilt.z = 0;
-  this.animData.pawRaise.fl = 0;
-  this.animData.pawRaise.fr = 0;  
-  this.animData.pawRaise.bl = 0;
-  this.animData.pawRaise.br = 0;
-}
-}
+        } else if (this.phase === 'restHold') {
+          this.animData.bodyOffset.z = 0;
+          this.animData.bodyOffset.y = 0;
+          this.animData.headTilt.x = 0;
+          this.animData.headTilt.y = 0;
+          this.animData.headTilt.z = 0;
+          this.animData.pawRaise.fl = 0;
+          this.animData.pawRaise.fr = 0;  
+          this.animData.pawRaise.bl = 0;
+          this.animData.pawRaise.br = 0;
+        }
+        }
 
   getAnimationData() {
     return this.animData;

@@ -859,45 +859,20 @@ LIBS.translateZ(MudkipRig.POSITION_MATRIX, anim.bodyOffset.z);
   applyPawRaise(BODY_PARTS.legs.frontRight, anim.pawRaise.fr);
   applyPawRaise(BODY_PARTS.legs.backLeft,   anim.pawRaise.bl);
   applyPawRaise(BODY_PARTS.legs.backRight,  anim.pawRaise.br);
+
+    if (anim.eyeScale !== 1.0) {
+    LIBS.set_I4(EyeL.MOVE_MATRIX);
+    LIBS.scale(EyeL.MOVE_MATRIX, anim.eyeScale, anim.eyeScale, anim.eyeScale);
+    
+    LIBS.set_I4(EyeR.MOVE_MATRIX);
+    LIBS.scale(EyeR.MOVE_MATRIX, anim.eyeScale, anim.eyeScale, anim.eyeScale);
+  } else {
+    // Reset to identity jika scale = 1.0
+    LIBS.set_I4(EyeL.MOVE_MATRIX);
+    LIBS.set_I4(EyeR.MOVE_MATRIX);
+  }
 }
 
-const environment = new Environment(
-  GL, 
-  SHADER_PROGRAM, 
-  _position, 
-  _color, 
-  _Mmatrix,
-  {
-    // === SKY CONFIG ===
-    skyTopColor: [135/255, 206/255, 250/255],    // biru langit
-    skyBottomColor: [200/255, 230/255, 255/255], // biru muda/putih
-    skySize: 50,
-
-    // === GROUND CONFIG ===
-    groundSize: 100,           // 100x100 units
-    groundSegments: 50,        // detail
-    muddyColor: [0.45, 0.35, 0.25],      // coklat lumpur
-    puddleColor: [0.25, 0.4, 0.55],      // biru genangan
-    heightVariation: 0.5,      // bumpy ground
-    puddleCount: 12,           // jumlah puddles
-
-    // === ROCKS CONFIG ===
-    rockCount: 20,                       // 20 batu
-    rockSizeRange: [0.5, 2.5],          // ukuran random
-    rockSpreadArea: 80,                  // area penyebaran
-    rockColor: [0.45, 0.45, 0.45],      // gray
-
-    // === FOUNTAIN CONFIG ===
-    enableFountain: true,      // set false kalau gak mau air terjun
-    fountainHeight: 8,         // tinggi air terjun
-    fountainWidth: 2,          // lebar
-    waterColor: [0.2, 0.5, 0.8],        // biru air
-    flowSpeed: 1.0,            // kecepatan animasi
-    fountainX: 15,             // posisi X (kanan)
-    fountainY: 3,              // posisi Y (tinggi)
-    fountainZ: -10,            // posisi Z (agak ke belakang)
-  }
-);
 
 const CameraRig = new group(_Mmatrix);  // untuk rotasi kamera
 const MudkipRig = new group(_Mmatrix);
@@ -929,7 +904,7 @@ Badan.childs.push(tail, kakiKiriDepan, kakiKananDepan, KakiKananBelakang, KakiKi
 BellyPatchDepan.childs.push(BellyLineBelakang);
 Badan.childs.push(BellyPatchDepan, OutlineKiri, OutlineKanan);
 
-Rig.childs.push(environment);  // environment di-render pertama (background) 
+// Rig.childs.push(environment); 
 // Rig.childs.push(Badan);
 Badan.childs.push(Kepala);
 
@@ -1027,7 +1002,6 @@ CameraRig.setup();
         LIBS.set_I4(CameraRig.MOVE_MATRIX);      // ← GANTI dari Rig
         LIBS.rotateY(CameraRig.MOVE_MATRIX, THETA);
         LIBS.rotateX(CameraRig.MOVE_MATRIX, PHI);
-         environment.update(dt);
         updateTail(time);
         updateSiripTengah(time);
          mudkipAnim.update(time);
