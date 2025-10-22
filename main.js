@@ -305,6 +305,19 @@ let isDragging = false;
 let lastMouseX = 0;
 let lastMouseY = 0;
 
+let cameraPosition = [0, 1.5, 5];
+let cameraFront = [0, 0, -1];
+let cameraUp = [0, 1, 0];
+let cameraSpeed = 0.1;
+
+const keys = {};
+window.addEventListener('keydown', (e) => {
+    keys[e.key] = true;
+});
+window.addEventListener('keyup', (e) => {
+    keys[e.key] = false;
+});
+
 canvas.addEventListener('mousedown', (e) => {
     isDragging = true;
     lastMouseX = e.clientX;
@@ -320,9 +333,18 @@ canvas.addEventListener('mousemove', (e) => {
         const deltaX = e.clientX - lastMouseX;
         const deltaY = e.clientY - lastMouseY;
 
-        cameraAngleX += deltaY * 0.01;
-        cameraAngleY += deltaX * 0.01;
+        cameraAngleY += deltaX * 0.005;
+        cameraAngleX -= deltaY * 0.005;
 
+        // Clamp cameraAngleX to avoid flipping
+        if (cameraAngleX > Math.PI / 2) cameraAngleX = Math.PI / 2;
+        if (cameraAngleX < -Math.PI / 2) cameraAngleX = -Math.PI / 2;
+
+        const frontX = Math.cos(cameraAngleX) * Math.sin(cameraAngleY);
+        const frontY = Math.sin(cameraAngleX);
+        const frontZ = Math.cos(cameraAngleX) * Math.cos(cameraAngleY);
+        cameraFront = [frontX, frontY, -frontZ];
+        
         lastMouseX = e.clientX;
         lastMouseY = e.clientY;
     }
@@ -330,6 +352,39 @@ canvas.addEventListener('mousemove', (e) => {
 
 function render(now) {
     now *= 0.001;  // convert to seconds
+
+    if (keys['w']) {
+        cameraPosition[0] += cameraFront[0] * cameraSpeed;
+        cameraPosition[1] += cameraFront[1] * cameraSpeed;
+        cameraPosition[2] += cameraFront[2] * cameraSpeed;
+    }
+    if (keys['s']) {
+        cameraPosition[0] -= cameraFront[0] * cameraSpeed;
+        cameraPosition[1] -= cameraFront[1] * cameraSpeed;
+        cameraPosition[2] -= cameraFront[2] * cameraSpeed;
+    }
+    if (keys['a']) {
+        const cross = [
+            cameraFront[1] * cameraUp[2] - cameraFront[2] * cameraUp[1],
+            cameraFront[2] * cameraUp[0] - cameraFront[0] * cameraUp[2],
+            cameraFront[0] * cameraUp[1] - cameraFront[1] * cameraUp[0]
+        ];
+        const norm = Math.sqrt(cross[0] * cross[0] + cross[1] * cross[1] + cross[2] * cross[2]);
+        cameraPosition[0] -= (cross[0] / norm) * cameraSpeed;
+        cameraPosition[1] -= (cross[1] / norm) * cameraSpeed;
+        cameraPosition[2] -= (cross[2] / norm) * cameraSpeed;
+    }
+    if (keys['d']) {
+        const cross = [
+            cameraFront[1] * cameraUp[2] - cameraFront[2] * cameraUp[1],
+            cameraFront[2] * cameraUp[0] - cameraFront[0] * cameraUp[2],
+            cameraFront[0] * cameraUp[1] - cameraFront[1] * cameraUp[0]
+        ];
+        const norm = Math.sqrt(cross[0] * cross[0] + cross[1] * cross[1] + cross[2] * cross[2]);
+        cameraPosition[0] += (cross[0] / norm) * cameraSpeed;
+        cameraPosition[1] += (cross[1] / norm) * cameraSpeed;
+        cameraPosition[2] += (cross[2] / norm) * cameraSpeed;
+    }
 
     gl.clearColor(0.0, 0.0, 0.0, 1.0);
     gl.clearDepth(1.0);
@@ -345,10 +400,13 @@ function render(now) {
     mat4.perspective(projectionMatrix, fieldOfView, aspect, zNear, zFar);
 
     const viewMatrix = mat4.create();
-    const cameraX = cameraDistance * Math.sin(cameraAngleY) * Math.cos(cameraAngleX);
-    const cameraY = cameraDistance * Math.sin(cameraAngleX);
-    const cameraZ = cameraDistance * Math.cos(cameraAngleY) * Math.cos(cameraAngleX);
-    mat4.lookAt(viewMatrix, [cameraX, cameraY, cameraZ], [0, 0, 0], [0, 1, 0]);
+    const lookAtPoint = [
+        cameraPosition[0] + cameraFront[0],
+        cameraPosition[1] + cameraFront[1],
+        cameraPosition[2] + cameraFront[2]
+    ];
+    mat4.lookAt(viewMatrix, cameraPosition, lookAtPoint, cameraUp);
+
 
     // Draw sky
     gl.depthMask(false);
