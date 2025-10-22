@@ -70,9 +70,6 @@ var shader_fragment_source = `
     varying vec3 vNormal;
     varying vec3 vFragPos;
 
-    // ==========================
-    //  UNIFORMS (lighting)
-    // ==========================
     uniform vec3 lightDir1;   // lampu utama (key light)
     uniform vec3 lightCol1;
     uniform vec3 lightDir2;   // lampu isi (fill light)
@@ -92,13 +89,11 @@ var shader_fragment_source = `
         vec3 N = normalize(vNormal);
         vec3 V = normalize(viewPos - vFragPos);
 
-        // --- Key light ---
         vec3 L1 = normalize(-lightDir1);
         float diff1 = clamp(dot(N, L1) * 0.5 + 0.5, 0.0, 1.0);
         vec3 H1 = normalize(L1 + V);
         float spec1 = pow(max(dot(N, H1), 0.0), uShininess);
 
-        // --- Fill light ---
         vec3 L2 = normalize(-lightDir2);
         float diff2 = clamp(dot(N, L2) * 0.5 + 0.5, 0.0, 1.0);
         vec3 H2 = normalize(L2 + V);
@@ -165,72 +160,48 @@ var shader_fragment_source = `
     const uLightDir2 = GL.getUniformLocation(SHADER_PROGRAM, "lightDir2");
     const uLightCol2 = GL.getUniformLocation(SHADER_PROGRAM, "lightCol2");
 
-    // intensitas & material
     const uAmbient   = GL.getUniformLocation(SHADER_PROGRAM, "uAmbient");
     const uDiffuse   = GL.getUniformLocation(SHADER_PROGRAM, "uDiffuse");
     const uSpecular  = GL.getUniformLocation(SHADER_PROGRAM, "uSpecular");
     const uShininess = GL.getUniformLocation(SHADER_PROGRAM, "uShininess");
 
-// set nilai awal
-GL.uniform3f(uLightDir1, -0.35, 0.80, -0.55); // key: depan-atas-kiri
+
+GL.uniform3f(uLightDir1, -0.35, 0.80, -0.55); 
 GL.uniform3f(uLightCol1,  1.00, 1.00, 1.00);
 
-GL.uniform3f(uLightDir2,  0.40, -.20, 0.60); // fill: belakang-bawah-kanan
-GL.uniform3f(uLightCol2,  0.70, 0.80, 1.00);  // sedikit kebiruan
-
+GL.uniform3f(uLightDir2,  0.40, -.20, 0.60);
+GL.uniform3f(uLightCol2,  0.70, 0.80, 1.00); 
 GL.uniform1f(uAmbient,   0.45);
 GL.uniform1f(uDiffuse,   0.70);
 GL.uniform1f(uSpecular,  0.20);
 GL.uniform1f(uShininess, 22.0);
 
-// posisi kamera di world space (sesuaikan kamera kamu)
 GL.uniform3f(uViewPos, 0.0, 0.0, 3.0);
 
-   
-
 const Kepala = new ellipsoid(GL, SHADER_PROGRAM, _position, _color, _normal, _Mmatrix, {
-    rx: 1.6, ry: 1.4, rz: 1.7,   
-    segments: 48, rings: 32,
-    color: [123 / 255, 185 / 255, 239 / 255] 
+    rx: 1.6, ry: 1.4, rz: 1.7, segments: 48, rings: 32, color: [123 / 255, 185 / 255, 239 / 255] 
 });
 LIBS.set_I4(Kepala.POSITION_MATRIX);
-LIBS.translateY(Kepala.POSITION_MATRIX,  1.4); // tinggi kepala
-LIBS.translateZ(Kepala.POSITION_MATRIX,  1.1); // “nempel” ke depan badan
+LIBS.translateY(Kepala.POSITION_MATRIX,  1.4); 
+LIBS.translateZ(Kepala.POSITION_MATRIX,  1.1); 
 LIBS.set_I4(Kepala.MOVE_MATRIX);
 LIBS.rotateX(Kepala.MOVE_MATRIX, 0.08); 
 
-// Pipi kanan (orange)
 const PipiKanan = new ellipsoid(GL, SHADER_PROGRAM, _position, _color, _normal, _Mmatrix, {
-  rx: 0.6, ry: 0.8, rz: 0.8, 
-  segments: 36, rings: 24,
-  color: [255/255, 173/255, 66/255]       
-});
+  rx: 0.6, ry: 0.8, rz: 0.8, segments: 36, rings: 24, color: [255/255, 173/255, 66/255] });
 LIBS.translateX(PipiKanan.POSITION_MATRIX,  1.1);
 LIBS.translateY(PipiKanan.POSITION_MATRIX, -0.1);
-
-
-const EPS = 0.015;                   
-const OFFSET = 0.6 - EPS;             
+         
 const ConeKanan = new cone(GL, SHADER_PROGRAM, _position, _color, _normal, _Mmatrix, {
-  radiusBottom: 0.26,                 
-  radiusTop:    0.02,                  
-  height:       0.90,                  
-  segments:     32,
-  color: [255/255, 173/255, 66/255]
-});
+  radiusBottom: 0.26, radiusTop: 0.02, height: 0.90, segments: 32, color: [255/255, 173/255, 66/255]});
 LIBS.set_I4(ConeKanan.POSITION_MATRIX);
-LIBS.rotateY(ConeKanan.POSITION_MATRIX, -8 * Math.PI/180); // condong tipis ke depan
+LIBS.rotateY(ConeKanan.POSITION_MATRIX, -8 * Math.PI/180); 
 LIBS.translateY(ConeKanan.POSITION_MATRIX, -0.06);
 LIBS.translateX(ConeKanan.POSITION_MATRIX, 0.5);
 LIBS.scale(ConeKanan.MOVE_MATRIX, 1.0, 0.95, 0.75);
 
 const ConeKananAtas = new cone(GL, SHADER_PROGRAM, _position, _color, _normal, _Mmatrix, {
-  radiusBottom: 0.26,
-  radiusTop:    0.02,
-  height:       0.90,
-  segments:     32,
-  color: [255/255, 173/255, 66/255]
-});
+  radiusBottom: 0.26, radiusTop: 0.02,height: 0.90, segments: 32, color: [255/255, 173/255, 66/255]});
 LIBS.set_I4(ConeKananAtas.POSITION_MATRIX);
 LIBS.rotateZ(ConeKananAtas.POSITION_MATRIX, 45 * Math.PI/180);
 LIBS.rotateY(ConeKananAtas.POSITION_MATRIX, -8 * Math.PI/180);
@@ -239,12 +210,7 @@ LIBS.translateX(ConeKananAtas.POSITION_MATRIX, 0.4);
 LIBS.scale(ConeKananAtas.MOVE_MATRIX, 1.0, 0.95, 0.75);
 
 const ConeKananBawah = new cone(GL, SHADER_PROGRAM, _position, _color, _normal, _Mmatrix, {
-  radiusBottom: 0.26,
-  radiusTop:    0.02,
-  height:       0.90,
-  segments:     32,
-  color: [255/255, 173/255, 66/255]
-});
+  radiusBottom: 0.26, radiusTop: 0.02, height: 0.90, segments: 32, color: [255/255, 173/255, 66/255]});
 LIBS.set_I4(ConeKananBawah.POSITION_MATRIX);
 LIBS.rotateZ(ConeKananBawah.POSITION_MATRIX, -48 * Math.PI/180);  
 LIBS.rotateY(ConeKananBawah.POSITION_MATRIX, -8 * Math.PI/180);  
@@ -253,24 +219,12 @@ LIBS.translateX(ConeKananBawah.POSITION_MATRIX, 0.4);
 LIBS.scale(ConeKananBawah.MOVE_MATRIX, 1.0, 0.95, 0.75);
 
 const PipiKiri = new ellipsoid(GL, SHADER_PROGRAM, _position, _color, _normal, _Mmatrix, {
-  rx: 0.6, ry: 0.8, rz: 0.8,
-  segments: 36, rings: 24,
-  color: [255/255, 173/255, 66/255]
-});
+  rx: 0.6, ry: 0.8, rz: 0.8, segments: 36, rings: 24, color: [255/255, 173/255, 66/255]});
 LIBS.translateX(PipiKiri.POSITION_MATRIX, -1.1);
 LIBS.translateY(PipiKiri.POSITION_MATRIX, -0.1);
 
-const EPS_KIRI = 0.015;
-const RX_PIPI_KIRI = 0.6;
-const OFFSET_LEFT = +(RX_PIPI_KIRI - EPS_KIRI); 
-
 const ConeKiri = new cone(GL, SHADER_PROGRAM, _position, _color, _normal, _Mmatrix, {
-  radiusBottom: 0.26,
-  radiusTop:    0.02,
-  height:       0.90,
-  segments:     32,
-  color: [255/255, 173/255, 66/255]
-});
+  radiusBottom: 0.26, radiusTop: 0.02, height: 0.90, segments: 32, color: [255/255, 173/255, 66/255]});
 LIBS.set_I4(ConeKiri.POSITION_MATRIX);
 LIBS.rotateY(ConeKiri.POSITION_MATRIX, Math.PI);
 LIBS.rotateY(ConeKiri.POSITION_MATRIX, -8 * Math.PI/180);  
@@ -279,12 +233,7 @@ LIBS.translateX(ConeKiri.POSITION_MATRIX, -0.5);
 LIBS.scale(ConeKiri.MOVE_MATRIX, 1.0, 0.95, 0.75);
 
 const ConeKiriAtas = new cone(GL, SHADER_PROGRAM, _position, _color, _normal, _Mmatrix, {
-  radiusBottom: 0.26,
-  radiusTop:    0.02,
-  height:       0.80,
-  segments:     32,
-  color: [255/255, 173/255, 66/255]
-});
+  radiusBottom: 0.26, radiusTop: 0.02, height: 0.80, segments: 32, color: [255/255, 173/255, 66/255]});
 LIBS.set_I4(ConeKiriAtas.POSITION_MATRIX);
 LIBS.rotateZ(ConeKiriAtas.POSITION_MATRIX, 138 * Math.PI/180);  
 LIBS.rotateY(ConeKiriAtas.POSITION_MATRIX, 8 * Math.PI/180);
@@ -293,12 +242,7 @@ LIBS.translateX(ConeKiriAtas.POSITION_MATRIX, -0.4);
 LIBS.scale(ConeKiriAtas.MOVE_MATRIX, 1.0, 0.95, 0.75);
 
 const ConeKiriBawah = new cone(GL, SHADER_PROGRAM, _position, _color, _normal, _Mmatrix, {
-  radiusBottom: 0.26,
-  radiusTop:    0.02,
-  height:       0.80,
-  segments:     32,
-  color: [255/255, 173/255, 66/255]
-});
+  radiusBottom: 0.26, radiusTop: 0.02, height: 0.80, segments: 32, color: [255/255, 173/255, 66/255]});
 LIBS.set_I4(ConeKiriBawah.POSITION_MATRIX);
 LIBS.rotateZ(ConeKiriBawah.POSITION_MATRIX, -138 * Math.PI/180); 
 LIBS.rotateY(ConeKiriBawah.POSITION_MATRIX, 8 * Math.PI/180);  
@@ -306,136 +250,91 @@ LIBS.translateY(ConeKiriBawah.POSITION_MATRIX, -0.2);
 LIBS.translateX(ConeKiriBawah.POSITION_MATRIX, -0.4);    
 LIBS.scale(ConeKiriBawah.MOVE_MATRIX, 1.0, 0.95, 0.75);
 
-const eps = 0.01; // ~0.6°
 const Dagu = new lingkaran(GL, SHADER_PROGRAM, _position, _color, _normal, _Mmatrix, {
-  rx: 1.6, ry: 1.4, rz: 1.70,  
-  segments: 64, rings: 32,
-  color: [198/255,222/255,247/255],
-  phiStart: -Math.PI/2, 
-  phiEnd:   -Math.PI/17,
-  thetaStart: 0, thetaEnd: Math.PI
-});
+  rx: 1.6, ry: 1.4, rz: 1.70, segments: 64, rings: 32, color: [198/255,222/255,247/255],
+  phiStart: -Math.PI/2, phiEnd:   -Math.PI/17,
+  thetaStart: 0, thetaEnd: Math.PI });
 LIBS.translateY(Dagu.POSITION_MATRIX, -0.02);  
 LIBS.translateZ(Dagu.POSITION_MATRIX, 0.0); 
 
 const GarisPemisah = new lingkaran(GL, SHADER_PROGRAM, _position, _color, _normal, _Mmatrix, {
-  rx: 1.62, ry: 1.5, rz: 1.75, 
-  segments: 64, rings: 6,      
-  color: [0, 0, 0],            
-  phiStart: -Math.PI/17 - 0.01,
-  phiEnd:   -Math.PI/17 + 0.01,
-  thetaStart: Math.PI/8,     
-  thetaEnd:   Math.PI*7/8   
-});
+  rx: 1.62, ry: 1.5, rz: 1.75, segments: 64, rings: 6, color: [0, 0, 0],            
+  phiStart: -Math.PI/17 - 0.01, phiEnd:   -Math.PI/17 + 0.01,
+  thetaStart: Math.PI/8, thetaEnd:   Math.PI*7/8 });
 LIBS.translateY(GarisPemisah.POSITION_MATRIX, -0.02);
 LIBS.translateZ(GarisPemisah.POSITION_MATRIX, -0.05);
 
 const HidungKanan = new ellipsoid(GL, SHADER_PROGRAM, _position, _color, _normal, _Mmatrix, {
-  rx: 0.015, ry: 0.025, rz: 0.01,
-  segments: 12, rings: 8,
-  color: [0, 0, 0]
-});
+  rx: 0.015, ry: 0.025, rz: 0.01, segments: 12, rings: 8, color: [0, 0, 0]});
 LIBS.set_I4(HidungKanan.POSITION_MATRIX);
 LIBS.translateX(HidungKanan.POSITION_MATRIX, 0.17);
-LIBS.translateY(HidungKanan.POSITION_MATRIX, -0.1);   // naikkan lagi
-LIBS.translateZ(HidungKanan.POSITION_MATRIX, 1.68);   // lebih ke depan
+LIBS.translateY(HidungKanan.POSITION_MATRIX, -0.1);
+LIBS.translateZ(HidungKanan.POSITION_MATRIX, 1.68);   
 
 const HidungKiri = new ellipsoid(GL, SHADER_PROGRAM, _position, _color, _normal, _Mmatrix, {
-  rx: 0.015, ry: 0.025, rz: 0.01,
-  segments: 12, rings: 8,
-  color: [0, 0, 0]
-});
+  rx: 0.015, ry: 0.025, rz: 0.01, segments: 12, rings: 8, color: [0, 0, 0]});
 LIBS.set_I4(HidungKiri.POSITION_MATRIX);
 LIBS.translateX(HidungKiri.POSITION_MATRIX, -0.15);
 LIBS.translateY(HidungKiri.POSITION_MATRIX, -0.1);
 LIBS.translateZ(HidungKiri.POSITION_MATRIX, 1.68);
 
 const EyeL = new ellipsoid(GL, SHADER_PROGRAM, _position, _color, _normal, _Mmatrix, {
-  rx: 0.18, ry: 0.26, rz: 0.15,
-  segments: 36, rings: 24,
-  color: [0.02, 0.02, 0.02]
-});
+  rx: 0.18, ry: 0.26, rz: 0.15, segments: 36, rings: 24, color: [0.02, 0.02, 0.02]});
 LIBS.translateX(EyeL.POSITION_MATRIX, -0.58);
 LIBS.translateY(EyeL.POSITION_MATRIX,  0.15);
 LIBS.translateZ(EyeL.POSITION_MATRIX,  1.5);
 LIBS.scale(EyeL.POSITION_MATRIX, 1.0, 1.05, 0.95);
-LIBS.rotateY(EyeL.POSITION_MATRIX,  +0.08);   // rotasi bola mata (opsional)
+LIBS.rotateY(EyeL.POSITION_MATRIX,  +0.08);   
 
 const EyeL_Hi = new ellipsoid(GL, SHADER_PROGRAM, _position, _color, _normal, _Mmatrix, {
-  rx: 0.08, ry: 0.108, rz: 0.05,
-  color: [1,1,1]
-});
-LIBS.translateX(EyeL_Hi.POSITION_MATRIX, -0.06); // kiri
-LIBS.translateY(EyeL_Hi.POSITION_MATRIX,  +0.09); // atas
-LIBS.translateZ(EyeL_Hi.POSITION_MATRIX,  +0.1); // keluar dikit
-LIBS.rotateZ(EyeL_Hi.POSITION_MATRIX, -0.12);     // sedikit miring
+  rx: 0.08, ry: 0.108, rz: 0.05, color: [1,1,1] });
+LIBS.translateX(EyeL_Hi.POSITION_MATRIX, -0.06); 
+LIBS.translateY(EyeL_Hi.POSITION_MATRIX,  +0.09); 
+LIBS.translateZ(EyeL_Hi.POSITION_MATRIX,  +0.1);
+LIBS.rotateZ(EyeL_Hi.POSITION_MATRIX, -0.12);   
 
-// — sheen abu-abu: KANAN-BAWAH —
 const EyeL_Sh = new ellipsoid(GL, SHADER_PROGRAM, _position, _color, _normal, _Mmatrix, {
-  rx: 0.07, ry: 0.11, rz: 0.05,
-  color: [107/255, 86/255, 96/255]
-});
-LIBS.translateX(EyeL_Sh.POSITION_MATRIX,  +0.008); // kanan
-LIBS.translateY(EyeL_Sh.POSITION_MATRIX,  -0.07); // bawah
-LIBS.translateZ(EyeL_Sh.POSITION_MATRIX,  +0.11); // keluar dikit
-LIBS.scale   (EyeL_Sh.POSITION_MATRIX, 1.10, 0.85, 1.00); // pipihkan
-LIBS.rotateZ (EyeL_Sh.POSITION_MATRIX,  -0.30);           // tilt ke bawah-kanan
+  rx: 0.07, ry: 0.11, rz: 0.05, color: [107/255, 86/255, 96/255]});
+LIBS.translateX(EyeL_Sh.POSITION_MATRIX,  +0.008); 
+LIBS.translateY(EyeL_Sh.POSITION_MATRIX,  -0.07); 
+LIBS.translateZ(EyeL_Sh.POSITION_MATRIX,  +0.11); 
+LIBS.scale   (EyeL_Sh.POSITION_MATRIX, 1.10, 0.85, 1.00); 
+LIBS.rotateZ (EyeL_Sh.POSITION_MATRIX,  -0.30);        
 
-EyeL.childs.push(EyeL_Hi);
-EyeL.childs.push(EyeL_Sh);
-
-// ===== Mata kanan (mirror X dari kiri) =====
 const EyeR = new ellipsoid(GL, SHADER_PROGRAM, _position, _color, _normal, _Mmatrix, {
-  rx: 0.18, ry: 0.26, rz: 0.15,
-  segments: 36, rings: 24,
-  color: [0.02, 0.02, 0.02]
-});
+  rx: 0.18, ry: 0.26, rz: 0.15, segments: 36, rings: 24, color: [0.02, 0.02, 0.02]});
 LIBS.translateX(EyeR.POSITION_MATRIX,  0.58);
 LIBS.translateY(EyeR.POSITION_MATRIX,  0.15);
 LIBS.translateZ(EyeR.POSITION_MATRIX,  1.5);
 
-
-
 const EyeR_Hi = new ellipsoid(GL, SHADER_PROGRAM, _position, _color, _normal, _Mmatrix, {
-  rx: 0.08, ry: 0.13, rz: 0.05,
-  color: [1,1,1]
-});
+  rx: 0.08, ry: 0.13, rz: 0.05, color: [1,1,1]});
 LIBS.translateX(EyeR_Hi.POSITION_MATRIX, -0.01);
 LIBS.translateY(EyeR_Hi.POSITION_MATRIX,  0.08);
 LIBS.translateZ(EyeR_Hi.POSITION_MATRIX,  0.11);
 LIBS.rotateY(EyeR.POSITION_MATRIX,  -0.08);
 
 const EyeR_Sh = new ellipsoid(GL, SHADER_PROGRAM, _position, _color, _normal, _Mmatrix, {
-  rx: 0.08, ry: 0.10, rz: 0.05,         
-  color: [107/255, 86/255, 96/255]
-});
-
+  rx: 0.08, ry: 0.10, rz: 0.05, color: [107/255, 86/255, 96/255]});
 LIBS.translateX(EyeR_Sh.POSITION_MATRIX,  +0.07);   
 LIBS.translateY(EyeR_Sh.POSITION_MATRIX,  -0.06);  
 LIBS.translateZ(EyeR_Sh.POSITION_MATRIX,  +0.095); 
 LIBS.scale(EyeR_Sh.POSITION_MATRIX, 1.10, 0.85, 1.00);
 LIBS.rotateZ(EyeR_Sh.POSITION_MATRIX, -0.30);  
 
-EyeR.childs.push(EyeR_Hi);
-EyeR.childs.push(EyeR_Sh);
-
 const SiripTengah = new ellipsoid(GL, SHADER_PROGRAM, _position, _color,_normal,  _Mmatrix, {
-  rx: 0.19, ry: 2.1, rz: 0.8, 
-  segments: 24, rings: 16,
-  color: [123 / 255, 190 / 255, 239 / 255]
-});
+  rx: 0.19, ry: 2.1, rz: 0.8, segments: 24, rings: 16, color: [123 / 255, 190 / 255, 239 / 255]});
+
 const FIN = {
   BASE_Y: 1.2,
   BASE_Z: -0.1,
   RY: 2.1,
   PIVOT_BASE: true,
   MODE: 'bouncy', 
-  
   TIME_SCALE: 1.0,
-  ANG_MAX: 20 * Math.PI / 180,    // maksimal tilt (20°)
+  ANG_MAX: 20 * Math.PI / 180,    
   BOUNCE_FREQUENCY: 1.0,  
   BOUNCE_DAMPING: 0.3,  
-
   ANG_RIGHT:  18 * Math.PI / 180,
   ANG_LEFT:  -15 * Math.PI / 180,
   ANG_RIGHT_SM: 6 * Math.PI / 180,
@@ -456,16 +355,12 @@ function getFinAngle(nowMs){
     const baseCycle = Math.sin(tScaled * Math.PI * 2 * baseFreq);
     const bounceFreq = baseFreq * 4; 
     const bouncePhase = tScaled * Math.PI * 2 * bounceFreq;
-    const bounceIntensity = Math.abs(baseCycle);  // 0 at center, 1 at extremes
+    const bounceIntensity = Math.abs(baseCycle); 
     const bounce = Math.sin(bouncePhase) * FIN.BOUNCE_DAMPING * bounceIntensity;
-    
-    // Combine
+
     const angle = FIN.ANG_MAX * (baseCycle + bounce * 0.3);
-    
     return angle;
-    
   } else {
-    // ===== ORIGINAL COMPLEX MODE =====
     let t = tScaled % FIN_TOTAL;
     const D = FIN.DUR;
     
@@ -502,101 +397,67 @@ function getFinAngle(nowMs){
   }
 }
 
-// --- Terapkan per-frame (panggil di animate(time)) ---
 function updateSiripTengah(nowMs){
   const angle = getFinAngle(nowMs);
-
   LIBS.set_I4(SiripTengah.POSITION_MATRIX);
 
   if (FIN.PIVOT_BASE){
-    // pivot pangkal: supaya pangkal tidak geser saat goyang
     LIBS.translateY(SiripTengah.POSITION_MATRIX, +FIN.RY);
     LIBS.rotateZ(SiripTengah.POSITION_MATRIX, angle);
     LIBS.translateY(SiripTengah.POSITION_MATRIX, -FIN.RY);
   } else {
     LIBS.rotateZ(SiripTengah.POSITION_MATRIX, angle);
   }
-
   LIBS.translateY(SiripTengah.POSITION_MATRIX, FIN.BASE_Y);
   LIBS.translateZ(SiripTengah.POSITION_MATRIX, FIN.BASE_Z);
 }
 
-
-
-// Garis sirip kanan (dari tengah ke kanan)
 const STRIPE_WIDTH = 0.045;
-const GAP_BOTTOM   = 1.8;   // jarak dari dasar
-const GAP_TOP      = 0.06;   // jarak dari puncak
+const GAP_BOTTOM   = 1.8;   
+const GAP_TOP      = 0.06;  
 const EPSX         = 0.012;
-
 const THETA_CENTER_RIGHT = -0.50;
-const THETA_CENTER_LEFT  = -0.20; // mirror tepat
+const THETA_CENTER_LEFT  = -0.20; 
 
-// --- stripe kanan (hitam) ---
 const GarisSiripKanan = new lingkaran(GL, SHADER_PROGRAM, _position, _color, _normal,_Mmatrix, {
-  rx: 0.19, ry: 2.1, rz: 0.8,
-  segments: 96, rings: 64,
-  color: [0,0,0],
-  phiStart: -Math.PI/2 + GAP_BOTTOM,
-  phiEnd:    Math.PI/2  - GAP_TOP,
-  thetaStart: THETA_CENTER_RIGHT - STRIPE_WIDTH/2,
-  thetaEnd:   THETA_CENTER_RIGHT + STRIPE_WIDTH/2,
-});
+  rx: 0.19, ry: 2.1, rz: 0.8, segments: 96, rings: 64, color: [0,0,0],
+  phiStart: -Math.PI/2 + GAP_BOTTOM, phiEnd:    Math.PI/2  - GAP_TOP,
+  thetaStart: THETA_CENTER_RIGHT - STRIPE_WIDTH/2, thetaEnd:   THETA_CENTER_RIGHT + STRIPE_WIDTH/2,});
 LIBS.set_I4(GarisSiripKanan.POSITION_MATRIX);
 LIBS.translateX(GarisSiripKanan.POSITION_MATRIX, +EPSX);
 LIBS.translateZ(GarisSiripKanan.POSITION_MATRIX, -0.08); 
 
-// --- stripe kiri (merah) → sama arah/kemiringan dengan yang hitam ---
 const GarisSiripKiri = new lingkaran(GL, SHADER_PROGRAM, _position, _color, _normal,_Mmatrix, {
-  rx: 0.19, ry: 2.1, rz: 0.8,
-  segments: 96, rings: 64,
-  color: [0,0,0],
-  phiStart: -Math.PI/2 + GAP_BOTTOM,
-  phiEnd:    Math.PI/2  - GAP_TOP,
-  thetaStart: THETA_CENTER_LEFT - STRIPE_WIDTH/2,
-  thetaEnd:   THETA_CENTER_LEFT + STRIPE_WIDTH/2,
-});
+  rx: 0.19, ry: 2.1, rz: 0.8, segments: 96, rings: 64, color: [0,0,0],
+  phiStart: -Math.PI/2 + GAP_BOTTOM, phiEnd:    Math.PI/2  - GAP_TOP,
+  thetaStart: THETA_CENTER_LEFT - STRIPE_WIDTH/2, thetaEnd:   THETA_CENTER_LEFT + STRIPE_WIDTH/2,});
 LIBS.set_I4(GarisSiripKiri.POSITION_MATRIX);
 LIBS.translateX(GarisSiripKiri.POSITION_MATRIX, 0.012);
 LIBS.translateZ(GarisSiripKiri.POSITION_MATRIX, 0.22);
 
-// GARIS SIRIP KIRI (mirror dari kanan)
 const thetaBackA = Math.PI + 0.20;
-const thetaBackB = Math.PI + 0.50;
 
 const GarisSiripKananK = new lingkaran(GL, SHADER_PROGRAM, _position, _color,_normal, _Mmatrix, {
-  rx: 0.19, ry: 2.1, rz: 0.8,
-  segments: 48, rings: 32,
-  color: [0,0,0],
-  phiStart: -Math.PI/2 + GAP_BOTTOM,
-  phiEnd:    Math.PI/2  - GAP_TOP,
-  thetaStart: thetaBackA - STRIPE_WIDTH/2,
-  thetaEnd:   thetaBackA + STRIPE_WIDTH/2,
-});
+  rx: 0.19, ry: 2.1, rz: 0.8, segments: 48, rings: 32, color: [0,0,0],
+  phiStart: -Math.PI/2 + GAP_BOTTOM, phiEnd:    Math.PI/2  - GAP_TOP,
+  thetaStart: thetaBackA - STRIPE_WIDTH/2, thetaEnd:   thetaBackA + STRIPE_WIDTH/2,});
 LIBS.set_I4(GarisSiripKananK.POSITION_MATRIX);
 LIBS.translateX(GarisSiripKananK.POSITION_MATRIX, -0.012); 
-LIBS.translateZ(GarisSiripKananK.POSITION_MATRIX, 0.22); // BACK SIDE → nudge ke −X
+LIBS.translateZ(GarisSiripKananK.POSITION_MATRIX, 0.22); 
 
 const GarisSiripKiriK = new lingkaran(GL, SHADER_PROGRAM, _position, _color, _normal,_Mmatrix, {
-  rx: 0.19, ry: 2.1, rz: 0.8,
-  segments: 48, rings: 32,
-  color: [0,0,0],
-  phiStart: -Math.PI/2 + GAP_BOTTOM,
-  phiEnd:    Math.PI/2  - GAP_TOP,
-  thetaStart: thetaBackA - STRIPE_WIDTH/2,
-  thetaEnd:   thetaBackA + STRIPE_WIDTH/2,
-});
+  rx: 0.19, ry: 2.1, rz: 0.8, segments: 48, rings: 32, color: [0,0,0],
+  phiStart: -Math.PI/2 + GAP_BOTTOM, phiEnd:    Math.PI/2  - GAP_TOP,
+  thetaStart: thetaBackA - STRIPE_WIDTH/2, thetaEnd:   thetaBackA + STRIPE_WIDTH/2,});
 LIBS.set_I4(GarisSiripKiriK.POSITION_MATRIX);
 LIBS.translateX(GarisSiripKiriK.POSITION_MATRIX, -0.012); 
-LIBS.translateZ(GarisSiripKiriK.POSITION_MATRIX, -0.15); // BACK SIDE → nudge ke −X
+LIBS.translateZ(GarisSiripKiriK.POSITION_MATRIX, -0.15); 
 
 const BODY_COLOR = [123 / 255, 190 / 255, 239 / 255];
 const BELLY_COLOR = [198/255, 222/255, 247/255];
 
 const BODY_CONFIG = {
-  rx: 1.2,
-  ry: 1.0,
-  rz: 1.7,
+  rx: 1.2, ry: 1.0, rz: 1.7,
   flattenStartPhi: -0.22,
   flattenStrength: 0.65,
   flattenPlaneRatio: 0.92,
@@ -604,27 +465,17 @@ const BODY_CONFIG = {
   flattenLateralTaper: 0.1,
 };
 
-const Badan = new mudkipBody(
-  GL,
-  SHADER_PROGRAM,
-  _position,
-  _color,
-  _normal,
-  _Mmatrix,
-  {
+const Badan = new mudkipBody(GL, SHADER_PROGRAM, _position, _color, _normal, _Mmatrix,{
     ...BODY_CONFIG,
     color: BODY_COLOR,
   }
 );
-
 LIBS.set_I4(Badan.POSITION_MATRIX);
 LIBS.translateY(Badan.POSITION_MATRIX, -0.05);
 LIBS.translateZ(Badan.POSITION_MATRIX, -0.25);
 LIBS.rotateX(Badan.POSITION_MATRIX, -0.06);
 
-const BellyPatchDepan = new BellyPatch(
-  GL, SHADER_PROGRAM, _position, _color, _normal, _Mmatrix,
-  {
+const BellyPatchDepan = new BellyPatch(GL, SHADER_PROGRAM, _position, _color, _normal, _Mmatrix,{
     widthTop: 1.15,
     widthBottom: 0.95,
     length: 5.0,  
@@ -640,25 +491,22 @@ const BellyPatchDepan = new BellyPatch(
 );
 LIBS.set_I4(BellyPatchDepan.POSITION_MATRIX);
 LIBS.translateZ(BellyPatchDepan.POSITION_MATRIX, +0.02);
-
 LIBS.translateY(BellyPatchDepan.POSITION_MATRIX, -0.009);
 
 const OutlineKiri = new BellyOutline(GL, SHADER_PROGRAM, _position, _color,  _Mmatrix, {
   side: "left",
-  width: 0.02,                       // ketebalan garis
-  length: 5.0,                       // samakan dg BellyPatchDepan.length
+  width: 0.02,              
+  length: 5.0,               
   widthTop: 1.15,
   widthBottom: 0.95,
-  segments: 2,                       // 2 kolom sudah cukup
-  stacks: 128,                       // samakan agar mulus
+  segments: 2,                
+  stacks: 128,                  
   color: [0,0,0],
-
   bodyRx: BODY_CONFIG.rx,
   bodyRy: BODY_CONFIG.ry,
   bodyRz: BODY_CONFIG.rz,
   surfaceEpsilon: 0.04,
 });
-
 LIBS.set_I4(OutlineKiri.POSITION_MATRIX);
 LIBS.translateZ(OutlineKiri.POSITION_MATRIX, +0.02);
 LIBS.translateY(OutlineKiri.POSITION_MATRIX, -0.009);
@@ -681,9 +529,7 @@ LIBS.set_I4(OutlineKanan.POSITION_MATRIX);
 LIBS.translateZ(OutlineKanan.POSITION_MATRIX, +0.02);
 LIBS.translateY(OutlineKanan.POSITION_MATRIX, -0.009);
 
-const BellyLineBelakang = new BellyPatch(
-  GL, SHADER_PROGRAM, _position, _color, _normal, _Mmatrix,
-  {
+const BellyLineBelakang = new BellyPatch(GL, SHADER_PROGRAM, _position, _color, _normal, _Mmatrix,{
     widthTop:   1.0,         
     widthBottom:1.0,          
     length:     0.02,  
@@ -701,10 +547,7 @@ LIBS.rotateX(BellyLineBelakang.POSITION_MATRIX, Math.PI/2);
 LIBS.translateZ(BellyLineBelakang.POSITION_MATRIX,  -0.67); 
 LIBS.translateY(BellyLineBelakang.POSITION_MATRIX,  -0.02);
 
-
-const kakiKananDepan = new spherocylinder(
-  GL, SHADER_PROGRAM, _position, _color, _normal, _Mmatrix,
-  {
+const kakiKananDepan = new spherocylinder(GL, SHADER_PROGRAM, _position, _color, _normal, _Mmatrix,{
     radiusTop: 0.3, 
     taper: 0.75,     
     height: 1.5,      
@@ -728,7 +571,6 @@ LIBS.rotateZ(kakiKananDepan.POSITION_MATRIX, 0.18);
 const alasKananDepan = new lingkaran(
   GL, SHADER_PROGRAM, _position, _color, _normal, _Mmatrix,
   { rx: 0.27, ry: 0.25, rz: 0.45, segments: 40, rings: 12, color: BODY_COLOR, phiStart: -Math.PI/2, phiEnd: 0, thetaStart: 0, thetaEnd: Math.PI * 2,});
-
 LIBS.set_I4(alasKananDepan.POSITION_MATRIX);
 LIBS.rotateZ(alasKananDepan.POSITION_MATRIX, 0.16);
 LIBS.rotateX(alasKananDepan.POSITION_MATRIX, 0.18);
@@ -745,235 +587,123 @@ const KakiKananBelakang = new spherocylinder(
 );
 LIBS.set_I4(KakiKananBelakang.POSITION_MATRIX);
 LIBS.translateX(KakiKananBelakang.POSITION_MATRIX, +BODY_CONFIG.rx * 0.68);
-LIBS.translateY(
-  KakiKananBelakang.POSITION_MATRIX,
-  -BODY_CONFIG.ry * 1.10 + (1.7 * 0.5) - 0.03);
+LIBS.translateY(KakiKananBelakang.POSITION_MATRIX, -BODY_CONFIG.ry * 1.10 + (1.7 * 0.5) - 0.03);
 LIBS.translateZ(KakiKananBelakang.POSITION_MATRIX, -BODY_CONFIG.rz * 0.6);
 LIBS.rotateX(KakiKananBelakang.POSITION_MATRIX, Math.PI);
 LIBS.rotateX(KakiKananBelakang.POSITION_MATRIX, 0.36);
 LIBS.rotateZ(KakiKananBelakang.POSITION_MATRIX, 0.16);
 
-const alasKananBelakang = new lingkaran(
-  GL, SHADER_PROGRAM, _position, _color, _normal, _Mmatrix,
-  {
-
+const alasKananBelakang = new lingkaran(GL, SHADER_PROGRAM, _position, _color, _normal, _Mmatrix,{
     rx: 0.27,
-    ry: 0.25,    // tinggi dome (agak gepeng)
-    rz: 0.45,    // sedikit lonjong
-    
+    ry: 0.25, 
+    rz: 0.45,   
     segments: 40,
     rings: 12,
-    
-    color: BODY_COLOR,  // sama dengan warna kaki
-    
-    // ===== PARAMETER SUDUT =====
-    // Hemisphere BAWAH (dome menghadap ke bawah untuk nutup)
-    phiStart: -Math.PI/2,    // mulai dari kutub bawah
-    phiEnd: 0,               // sampai ekuator (dome menghadap bawah)
-    
-    // Full circle (360°)
+    color: BODY_COLOR,  
+    phiStart: -Math.PI/2,    
+    phiEnd: 0,              
     thetaStart: 0,
-    thetaEnd: Math.PI * 2,   // 2π = full circle
+    thetaEnd: Math.PI * 2,   
   }
 );
-
-// ===== POSISI ALAS =====
-// Posisi relatif terhadap parent (KakiKiriBelakang)
-// Alas harus berada di ujung BAWAH kaki
-
 LIBS.set_I4(alasKananBelakang.POSITION_MATRIX);
-
-// ===== URUTAN PENTING: Rotate dulu, baru Translate! =====
-
-// 1. Counter rotasi Z (kebalikan dari kaki yang -0.16)
 LIBS.rotateZ(alasKananBelakang.POSITION_MATRIX, 0.16);
-
-// 2. Counter rotasi X (kebalikan dari kaki yang +0.36)
 LIBS.rotateX(alasKananBelakang.POSITION_MATRIX, -0.20);
-
-// 3. TAMBAHAN: Rotasi Y untuk adjust orientasi dari belakang
-//    Kalau masih miring dari belakang, coba adjust ini
-LIBS.rotateY(alasKananBelakang.POSITION_MATRIX, 0.0);  // adjust kalau perlu
-
-// 4. Geser ke BAWAH (negatif!) ke ujung kaki
-//    height kaki = 1.5, setengah = 0.75
+LIBS.rotateY(alasKananBelakang.POSITION_MATRIX, 0.0);
 LIBS.translateY(alasKananBelakang.POSITION_MATRIX, 0.92);
-
-// 5. Geser sedikit ke depan biar kelihatan natural
 LIBS.translateZ(alasKananBelakang.POSITION_MATRIX, -0.14);
 
-
-// === Kaki KIRI DEPAN DAN BELAKANG
-
-const kakiKiriDepan = new spherocylinder(
-  GL, SHADER_PROGRAM, _position, _color, _normal,_Mmatrix,
-  {
-    radiusTop: 0.3,    // lebih besar, menempel ke badan
-    taper: 0.75,        // bagian bawah mengecil → bentuk natural
-    height: 1.5,        // tinggi bagian tabung (tanpa caps)
+const kakiKiriDepan = new spherocylinder(GL, SHADER_PROGRAM, _position, _color, _normal,_Mmatrix,{
+    radiusTop: 0.3,    
+    taper: 0.75,    
+    height: 1.5,        
     capRx: 0.24, 
     capRy: 0.18, 
-    capRz: 0.28,        // pipih vertikal
+    capRz: 0.28,    
     color: BODY_COLOR,
-    name: "kaki_kiri_depan",
   }
 );
-
-// ====== POSISI & ORIENTASI ======
 LIBS.set_I4(kakiKiriDepan.POSITION_MATRIX);
-
-// Geser ke sisi kanan tubuh
 LIBS.translateX(kakiKiriDepan.POSITION_MATRIX, +BODY_CONFIG.rx * -0.8);
-
-// Geser ke bawah agar nempel di perut bawah
 LIBS.translateY(kakiKiriDepan.POSITION_MATRIX, -BODY_CONFIG.ry * 1.10 + (1.5 * 0.5) - 0.03);
-
-// Geser sedikit ke depan
 LIBS.translateZ(kakiKiriDepan.POSITION_MATRIX, +BODY_CONFIG.rz * 0.35);
-
-// Balik orientasi agar ujung besar di atas, kecil di bawah
 LIBS.rotateX(kakiKiriDepan.POSITION_MATRIX, Math.PI);
+LIBS.rotateX(kakiKiriDepan.POSITION_MATRIX, -0.05); 
+LIBS.rotateZ(kakiKiriDepan.POSITION_MATRIX, -0.18); 
 
-// ROTASI KEMIRINGAN: ubah dari condong ke belakang → condong ke depan
-LIBS.rotateX(kakiKiriDepan.POSITION_MATRIX, -0.05);   // condong ke depan (was -0.10)
-LIBS.rotateZ(kakiKiriDepan.POSITION_MATRIX, -0.18);   // tetap sedikit keluar
-
-const alasKiriDepan = new lingkaran(
-  GL, SHADER_PROGRAM, _position, _color, _normal,_Mmatrix,
-  {
-    // Sesuaikan dengan radius kaki bagian bawah
-    // radiusTop kaki = 0.36, taper = 0.75 → radius bawah ≈ 0.27
-    // Buat sedikit lebih besar agar nutup sempurna
+const alasKiriDepan = new lingkaran(GL, SHADER_PROGRAM, _position, _color, _normal,_Mmatrix,{
     rx: 0.27,
-    ry: 0.25,    // tinggi dome (agak gepeng)
-    rz: 0.45,    // sedikit lonjong
-    
+    ry: 0.25,   
+    rz: 0.45,    
     segments: 40,
     rings: 12,
-    
-    color: BODY_COLOR,  // sama dengan warna kaki
-    
-    // ===== PARAMETER SUDUT =====
-    // Hemisphere BAWAH (dome menghadap ke bawah untuk nutup)
-    phiStart: -Math.PI/2,    // mulai dari kutub bawah
-    phiEnd: 0,               // sampai ekuator (dome menghadap bawah)
-    
-    // Full circle (360°)
+    color: BODY_COLOR,
+    phiStart: -Math.PI/2,    
+    phiEnd: 0,             
     thetaStart: 0,
-    thetaEnd: Math.PI * 2,   // 2π = full circle
+    thetaEnd: Math.PI * 2,  
   }
 );
-
 LIBS.set_I4(alasKiriDepan.POSITION_MATRIX);
-
-// ===== URUTAN PENTING: Rotate dulu, baru Translate! =====
-// 1. Counter rotasi Z (kebalikan dari kaki yang -0.16)
 LIBS.rotateZ(alasKiriDepan.POSITION_MATRIX, -0.16);
-// 2. Counter rotasi X (kebalikan dari kaki yang +0.36)
 LIBS.rotateX(alasKiriDepan.POSITION_MATRIX, 0.18);
-// 3. TAMBAHAN: Rotasi Y untuk adjust orientasi dari belakang
-//    Kalau masih miring dari belakang, coba adjust ini
-LIBS.rotateY(alasKiriDepan.POSITION_MATRIX, 0.0);  // adjust kalau perlu
-// 4. Geser ke BAWAH (negatif!) ke ujung kaki
-//    height kaki = 1.5, setengah = 0.75
+LIBS.rotateY(alasKiriDepan.POSITION_MATRIX, 0.0);  
 LIBS.translateY(alasKiriDepan.POSITION_MATRIX, 0.98);
-
-// 5. Geser sedikit ke depan biar kelihatan natural
 LIBS.translateZ(alasKiriDepan.POSITION_MATRIX, -0.14);
 
-
 function makeKuku(xOffset) {
-  const obj = new lingkaran(
-    GL, SHADER_PROGRAM, _position, _color, _normal,_Mmatrix,
-    {
-      rx: 0.01,   // sangat tipis ke samping
-      ry: 0.08,   // PANJANG ke bawah (total panjang ~ 0.09)
-      rz: 0.006,   // sangat tipis ke arah depan-belakang
-      segments: 8, rings: 2,
-      color: [0, 0, 0],
+  const obj = new lingkaran(GL, SHADER_PROGRAM, _position, _color, _normal,_Mmatrix,{
+      rx: 0.01, ry: 0.08, rz: 0.006,   
+      segments: 8, rings: 2, color: [0, 0, 0],
       thetaStart: 0, thetaEnd: Math.PI * 2,
       phiStart: -Math.PI/2, phiEnd: Math.PI/2,
     }
   );
   LIBS.set_I4(obj.POSITION_MATRIX);
-
-    // — Letakkan di tepi depan dome (alasKiriDepan: rx=0.27, ry=0.25, rz=0.45) —
-  // titik terbawah dome ~ y = -0.25; kita naikkan sedikit agar tidak z-fight
-  LIBS.rotateX(obj.POSITION_MATRIX, -(Math.PI / 4));  // supaya mengarah ke bawah
-  LIBS.translateX(obj.POSITION_MATRIX, xOffset);   // kiri/kanan
-  LIBS.translateY(obj.POSITION_MATRIX, -0.075);    // sedikit di atas dasar (-0.25)
-  LIBS.translateZ(obj.POSITION_MATRIX, -0.42);     // MAJU ke tepi depan (−Z)
+  LIBS.rotateX(obj.POSITION_MATRIX, -(Math.PI / 4)); 
+  LIBS.translateX(obj.POSITION_MATRIX, xOffset);  
+  LIBS.translateY(obj.POSITION_MATRIX, -0.075);    
+  LIBS.translateZ(obj.POSITION_MATRIX, -0.42);   
   LIBS.rotateX(obj.POSITION_MATRIX, 0.10);
-
   return obj;
 }
+
 const kukuKiridepan1 = makeKuku(-0.09);
 const kukuKiridepan2 = makeKuku(+0.09);
-
 const kukuKanandepan1 = makeKuku(-0.09);
 const kukuKanandepan2 = makeKuku(+0.09);
-
 const kukuKananbelakang1 = makeKuku(-0.09);
 const kukuKananbelakang2 = makeKuku(+0.09);
-
 const kukuKiribelakang1 = makeKuku(-0.09);
 const kukuKiribelakang2 = makeKuku(+0.09);
 
-
-const KakiKiriBelakang = new spherocylinder(
-  GL, SHADER_PROGRAM, _position, _color, _normal,_Mmatrix,
-  {
-    // lebih lebar dari kaki depan (0.30 → 0.36)
-    radiusTop: 0.36,          // pangkal menempel badan
-    taper: 0.75,              // bawah mengecil (otomatis rBottom = 0.27)
-    height: 1.3,              // samakan dengan depan
-
-    // caps elips — ikut dilebarkan agar proporsional
+const KakiKiriBelakang = new spherocylinder(GL, SHADER_PROGRAM, _position, _color, _normal,_Mmatrix,{
+    radiusTop: 0.36,         
+    taper: 0.75,           
+    height: 1.3,           
     capRx: 0.24, 
     capRy: 0.25, 
     capRz: 0.28, 
-
-    segments: 40, stacks: 3, capRings: 12,
-    color: BODY_COLOR,         // atau pakai BODY_COLOR kalau mau sama persis
-    name: "kaki_kiri_belakang",
+    segments: 40, stacks: 3, capRings: 12, color: BODY_COLOR,        
   }
 );
-
-// ====== POSISI & ORIENTASI ======
 LIBS.set_I4(KakiKiriBelakang.POSITION_MATRIX);
-
-// ke kanan (mirip kaki depan)
 LIBS.translateX(KakiKiriBelakang.POSITION_MATRIX, +BODY_CONFIG.rx * -0.68);
-
-// turun (pakai height 1.5 agar pangkal tetap nempel)
-LIBS.translateY(
-  KakiKiriBelakang.POSITION_MATRIX,
-  -BODY_CONFIG.ry * 1.10 + (1.7 * 0.5) - 0.03
+LIBS.translateY(KakiKiriBelakang.POSITION_MATRIX, -BODY_CONFIG.ry * 1.10 + (1.7 * 0.5) - 0.03
 );
 
-// ke belakang (bedakan dari kaki depan yang +Z)
 LIBS.translateZ(KakiKiriBelakang.POSITION_MATRIX, -BODY_CONFIG.rz * 0.6);
-
-// besar di atas, kecil di bawah
 LIBS.rotateX(KakiKiriBelakang.POSITION_MATRIX, Math.PI);
-
-// pose mirip depan: sedikit condong ke depan & keluar
 LIBS.rotateX(KakiKiriBelakang.POSITION_MATRIX, 0.36);
 LIBS.rotateZ(KakiKiriBelakang.POSITION_MATRIX, -0.16);
 
-
-const alasKiriBelakang = new lingkaran(
-  GL, SHADER_PROGRAM, _position, _color,_normal, _Mmatrix,
-  { rx: 0.27,
-    ry: 0.25,    // tinggi dome (agak gepeng)
-    rz: 0.45,    // sedikit lonjong
+const alasKiriBelakang = new lingkaran(GL, SHADER_PROGRAM, _position, _color,_normal, _Mmatrix,{ 
+  rx: 0.27, ry: 0.25, rz: 0.45,   
     segments: 40,
     rings: 12,
     color: BODY_COLOR, 
-    phiStart: -Math.PI/2,
-    phiEnd: 0,             
-    thetaStart: 0,
-    thetaEnd: Math.PI * 2,   // 2π = full circle
+    phiStart: -Math.PI/2, phiEnd: 0,             
+    thetaStart: 0, thetaEnd: Math.PI * 2,  
   }
 );
 LIBS.set_I4(alasKiriBelakang.POSITION_MATRIX);
@@ -983,36 +713,21 @@ LIBS.translateY(alasKiriBelakang.POSITION_MATRIX, 0.92);
 LIBS.translateZ(alasKiriBelakang.POSITION_MATRIX, -0.14);
 
 function applyPawRaise(leg, raiseAmount) {
-  // raiseAmount: 0 = turun, 1 = fully raised (45°)
-  
   if (raiseAmount === 0) {
-    return;  // MOVE_MATRIX sudah di-set di applyLegCurl
+    return;  
   }
-  
-  // ===== FIX: NEGATIVE rotateX untuk naik ke DEPAN =====
-  const raiseAngle = (Math.PI / 4) * raiseAmount;  // 0 → 45°
-  
+  const raiseAngle = (Math.PI / 4) * raiseAmount; 
   const legHeight = 1.5;
-  
-  // Rotate around pivot (pangkal kaki)
   LIBS.translateY(leg.MOVE_MATRIX, legHeight / 2);
-  LIBS.rotateX(leg.MOVE_MATRIX, -raiseAngle);  // ← NEGATIVE = naik ke DEPAN!
+  LIBS.rotateX(leg.MOVE_MATRIX, -raiseAngle); 
   LIBS.translateY(leg.MOVE_MATRIX, -legHeight / 2);
-  // ====================================================
 }
 
 const tail = new MudkipTail(
   GL, SHADER_PROGRAM, _position, _color, _normal, _Mmatrix,
   {
-    length:     1.3,
-    baseHeight: 0.15,    // pangkal tetap ramping
-    tipHeight:  1.2,     // ← NAIKKAN BANYAK dari 0.70 ke 1.2!
-    baseWidth:  0.02,
-    tipWidth:   0.1,    // naikkan juga biar proporsional
-    segments: 34,
-    slices: 34,
-    curve: 0.0,
-    color: [198/255,222/255,247/255],
+    length:     1.3, baseHeight: 0.15, tipHeight:  1.2, baseWidth:  0.02, tipWidth:   0.1,   
+    segments: 34, slices: 34, curve: 0.0, color: [198/255,222/255,247/255],
   }
 );
 
@@ -1088,7 +803,6 @@ const BODY_PARTS = {
   }
 };
 
-// Simpan transform ORIGINAL (untuk reset setelah animasi)
 const ORIGINAL_TRANSFORMS = {
   body: {
     posY: -0.05,
@@ -1100,23 +814,16 @@ const ORIGINAL_TRANSFORMS = {
     posZ: 1.1,
     rotX: 0.08,
   },
-  // Legs original akan disimpan setelah ini
 };
 
-
-// Initialize animation system
 const mudkipAnim = new MudkipAnimation(BODY_PARTS);
 
-// ===== HELPER: Apply Leg Curl =====
 function applyLegCurl(leg, curlAmount) {
-  // curlAmount: 0 = lurus, 1 = fully curled
-  
   if (curlAmount === 0) {
     // Reset ke posisi default
     LIBS.set_I4(leg.MOVE_MATRIX);
     return;
   }
-  
   LIBS.set_I4(leg.MOVE_MATRIX);
   const maxCurlAngle = Math.PI / 3;  
   const curlAngle = maxCurlAngle * curlAmount;
@@ -1151,7 +858,6 @@ function applyAnimation() {
   applyPawRaise(BODY_PARTS.legs.frontRight, anim.pawRaise.fr);
   applyPawRaise(BODY_PARTS.legs.backLeft,   anim.pawRaise.bl);
   applyPawRaise(BODY_PARTS.legs.backRight,  anim.pawRaise.br);
-  // ===========================================
 }
 
 
@@ -1282,11 +988,9 @@ Rig.setup(); // Setup rig sebagai root baru
         GL.uniformMatrix4fv(_Pmatrix, false, PROJMATRIX);
         GL.uniformMatrix4fv(_Vmatrix, false, VIEWMATRIX);
 
-        // Reset rotasi manual tiap frame
         LIBS.set_I4(Rig.MOVE_MATRIX);
-        LIBS.rotateY(Rig.MOVE_MATRIX, THETA); // drag kiri-kanan
-        LIBS.rotateX(Rig.MOVE_MATRIX, PHI);   // drag atas-bawah
-
+        LIBS.rotateY(Rig.MOVE_MATRIX, THETA); 
+        LIBS.rotateX(Rig.MOVE_MATRIX, PHI); 
         updateTail(time);
         updateSiripTengah(time);
          mudkipAnim.update(time);

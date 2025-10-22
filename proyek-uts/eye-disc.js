@@ -1,4 +1,3 @@
-// eye-disc.js
 export class EyeDisc {
   GL = null; SHADER_PROGRAM = null;
   _position = null; _color = null; _MMatrix = null;
@@ -13,12 +12,6 @@ export class EyeDisc {
   MOVE_MATRIX     = LIBS.get_I4();
   childs = [];
 
-  /**
-   * opts:
-   * - r: radius (default 0.18)
-   * - segments: jumlah segmen melingkar (default 32)
-   * - color: [r,g,b] 0..1
-   */
   constructor(GL, SHADER_PROGRAM, _position, _color, _Mmatrix, opts = {}) {
     this.GL = GL; this.SHADER_PROGRAM = SHADER_PROGRAM;
     this._position = _position; this._color = _color; this._MMatrix = _Mmatrix;
@@ -33,9 +26,8 @@ export class EyeDisc {
   _buildDisc(r, segments, color) {
     const v = []; const idx = [];
 
-    // pusat
     v.push(0, 0, 0,  color[0], color[1], color[2]);
-    // ring
+
     for (let i = 0; i <= segments; i++) {
       const a = (i / segments) * Math.PI * 2.0;
       const x = r * Math.cos(a);
@@ -43,7 +35,7 @@ export class EyeDisc {
       v.push(x, y, 0,  color[0], color[1], color[2]);
     }
 
-    // triangle fan: 0 = pusat, 1..segments+1 ring
+
     for (let i = 1; i <= segments; i++) {
       idx.push(0, i, i+1);
     }

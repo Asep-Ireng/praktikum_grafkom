@@ -1,4 +1,3 @@
-// spherocylinder.js — kapsul lengkap siap Phong shading
 export class spherocylinder {
   GL = null; SHADER_PROGRAM = null;
   _position = null; _color = null; _normal = null; _MMatrix = null;
@@ -56,7 +55,6 @@ export class spherocylinder {
     const ringLen = segments + 1;
     const h2 = height * 0.5;
 
-    // ===== 1. SHAFT =====
     for (let i = 0; i <= stacks; i++) {
       const t = i / stacks;
       const y = -h2 + t * height;
@@ -79,7 +77,6 @@ export class spherocylinder {
       }
     }
 
-    // ===== 2. TOP CAP =====
     let prevBase = stacks * ringLen;
     for (let i = 1; i <= capRings; i++) {
       const u = (i / capRings) * (Math.PI / 2);
@@ -114,7 +111,6 @@ export class spherocylinder {
       this.faces.push(a, b, topPole);
     }
 
-    // ===== 3. BOTTOM CAP =====
     prevBase = 0;
     for (let i = 1; i <= capRings; i++) {
       const u = (i / capRings) * (Math.PI / 2);
@@ -182,7 +178,6 @@ export class spherocylinder {
     GL.useProgram(this.SHADER_PROGRAM);
     GL.uniformMatrix4fv(this._MMatrix, false, this.MODEL_MATRIX);
 
-    // === lighting uniforms ===
     const normalMat3 = LIBS.get_normal_matrix(this.MODEL_MATRIX);
     const uNormalMatrix = GL.getUniformLocation(this.SHADER_PROGRAM, "normalMatrix");
     const uLightDirection = GL.getUniformLocation(this.SHADER_PROGRAM, "lightDirection");
@@ -194,7 +189,6 @@ export class spherocylinder {
     GL.uniform3f(uLightColor, 1.0, 1.0, 1.0);
     GL.uniform3f(uViewPos, 0.0, 0.0, 3.0);
 
-    // === vertex attributes: pos(3)+normal(3)+color(3) = 9 floats (stride 36)
     GL.bindBuffer(GL.ARRAY_BUFFER, this.OBJECT_VERTEX);
     GL.vertexAttribPointer(this._position, 3, GL.FLOAT, false, 36, 0);
     GL.vertexAttribPointer(this._normal,   3, GL.FLOAT, false, 36, 12);
@@ -207,7 +201,6 @@ export class spherocylinder {
     this.childs.forEach(c => c.render(this.MODEL_MATRIX));
   }
 
-  // Helper pivot
   setPoseTopPivot(rx = 0, rz = 0, ry = 0, height = null) {
     const shaft = (height ?? 1.0);
     const shift = -(shaft / 2);

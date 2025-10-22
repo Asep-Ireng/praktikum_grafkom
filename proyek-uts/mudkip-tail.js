@@ -1,4 +1,3 @@
-// mudkip-tail.js
 export class MudkipTail {
     GL = null;
     SHADER_PROGRAM = null;
@@ -29,7 +28,6 @@ export class MudkipTail {
         this._normal = _normal;
         this._MMatrix = _Mmatrix;
 
-        // Control parameters
         this.length = opts.length || 0.8;
         this.baseHeight = opts.baseHeight || 0.15;
         this.tipHeight = opts.tipHeight || 0.65;
@@ -43,7 +41,6 @@ export class MudkipTail {
         this.generate();
     }
 
-    // Cubic Bezier interpolation helper
     cubicBezier(t, p0, p1, p2, p3) {
         const oneMinusT = 1 - t;
         return oneMinusT * oneMinusT * oneMinusT * p0 +
@@ -52,21 +49,15 @@ export class MudkipTail {
                t * t * t * p3;
     }
 
-    // Fungsi kurva untuk spine ekor (centerline)
     spineCurve(t) {
         const x = 0;
-
-        // Sedikit lengkung ke atas (minimal)
-        const easeT = t * t * (3 - 2 * t); // smoothstep
+        const easeT = t * t * (3 - 2 * t);
         const y = easeT * this.curve * this.length * 0.3;
-
-        // Ke belakang - semakin jauh dari badan
         const z = -t * this.length;
 
         return [x, y, z];
     }
 
-    // Fungsi tinggi ekor DENGAN BEZIER - SMOOTH TEARDROP
     heightAt(t) {
         const u = Math.min(Math.max(t, 0.0), 1.0);
         const p0 = 0.10;
@@ -77,7 +68,6 @@ export class MudkipTail {
         return this.tipHeight * Math.max(0, shape);
     }
 
-    // Fungsi lebar/ketebalan ekor DENGAN BEZIER
     widthAt(t) {
         const u = Math.min(Math.max(t, 0.0), 1.0);
         const p0 = 0.08;
@@ -102,24 +92,19 @@ export class MudkipTail {
     for (let j = 0; j <= this.slices; j++) {
       const v = j / this.slices;
       const angle = v * Math.PI * 2.0;
-
-      // posisi titik di penampang (eliptik)
-      const localX = Math.cos(angle) * height; // “tinggi” sirip (sumbu X lokal)
-      const localY = Math.sin(angle) * width;  // “tebal” sirip (sumbu Y lokal)
+      const localX = Math.cos(angle) * height;
+      const localY = Math.sin(angle) * width; 
 
       const x = sx + localX;
       const y = sy + localY;
       const z = sz;
 
-      // ===== NORMAL lokal untuk penampang elips =====
-      // grad F = (x/a^2, y/b^2, 0) pada (localX, localY)
       let nx = (height > 1e-6) ? (localX / (height*height)) : 0.0;
       let ny = (width  > 1e-6) ? (localY / (width*width))   : 0.0;
       let nz = 0.0;
       const len = Math.hypot(nx, ny, nz) || 1.0;
-      nx /= len; ny /= len; // nz tetap 0
+      nx /= len; ny /= len;
 
-      // push: pos(3) + normal(3) + color(3)
       vertices.push(
         x, y, z,
         nx, ny, nz,
@@ -128,7 +113,6 @@ export class MudkipTail {
     }
   }
 
-  // indices sama seperti sebelumnya
   for (let i = 0; i < this.segments; i++) {
     for (let j = 0; j < this.slices; j++) {
       const a = i * (this.slices + 1) + j;
@@ -139,16 +123,16 @@ export class MudkipTail {
     }
   }
 
-  // ===== Tip cap (tutup ujung) — normal mengarah ke -Z =====
+  // tutup ujung ekor
   {
     const uTip = 0.2;
     const [sx, sy, sz] = this.spineCurve(uTip);
     const tipPush = Math.min(0.08, this.length * 0.08);
 
-    const tipIndex = (vertices.length / 9); // 9 float per vertex sekarang
+    const tipIndex = (vertices.length / 9); 
     vertices.push(
       sx, sy, sz - tipPush,
-      0, 0, -1,                          // normal
+      0, 0, -1,                          
       this.color[0], this.color[1], this.color[2]
     );
 
@@ -179,8 +163,6 @@ export class MudkipTail {
 
 render(PARENT_MATRIX) {
   const GL = this.GL;
-
-  // compose model matrix
   const M = LIBS.get_I4();
   LIBS.mul(M, PARENT_MATRIX, this.POSITION_MATRIX);
   LIBS.mul(M, M, this.MOVE_MATRIX);
@@ -189,12 +171,10 @@ render(PARENT_MATRIX) {
   GL.useProgram(this.SHADER_PROGRAM);
   GL.uniformMatrix4fv(this._MMatrix, false, this.MODEL_MATRIX);
 
-  // kirim normalMatrix (mat3) untuk Phong
   const uNormalMatrix = GL.getUniformLocation(this.SHADER_PROGRAM, "normalMatrix");
   const normalMat3 = LIBS.get_normal_matrix(this.MODEL_MATRIX);
   GL.uniformMatrix3fv(uNormalMatrix, false, normalMat3);
 
-  // ====== atribut: pos(3) + normal(3) + color(3) = 9 float → stride 36 ======
   GL.bindBuffer(GL.ARRAY_BUFFER, this.OBJECT_VERTEX);
   GL.vertexAttribPointer(this._position, 3, GL.FLOAT, false, 36, 0);
   GL.vertexAttribPointer(this._normal,   3, GL.FLOAT, false, 36, 12);

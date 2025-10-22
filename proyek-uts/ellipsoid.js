@@ -1,11 +1,10 @@
-// ellipsoid.js
 export class ellipsoid {
   GL = null;
   SHADER_PROGRAM = null;
 
   _position = null;
   _color = null;
-  _normal = null;  // ← TAMBAH INI
+  _normal = null;  
   _MMatrix = null;
 
   OBJECT_VERTEX = null;
@@ -22,10 +21,10 @@ export class ellipsoid {
   /**
    * @param {WebGLRenderingContext} GL
    * @param {WebGLProgram} SHADER_PROGRAM
-   * @param {GLuint} _position - attribute location for position
-   * @param {GLuint} _color - attribute location for color
-   * @param {GLuint} _normal - attribute location for normal
-   * @param {WebGLUniformLocation} _Mmatrix - uniform location for model matrix
+   * @param {GLuint} _position 
+   * @param {GLuint} _color 
+   * @param {GLuint} _normal
+   * @param {WebGLUniformLocation} _Mmatrix
    * @param {Object} opts
    */
   constructor(GL, SHADER_PROGRAM, _position, _color, _normal, _Mmatrix, opts = {}) {
@@ -33,7 +32,7 @@ export class ellipsoid {
     this.SHADER_PROGRAM = SHADER_PROGRAM;
     this._position = _position;
     this._color = _color;
-    this._normal = _normal;  // ← TAMBAH INI
+    this._normal = _normal; 
     this._MMatrix = _Mmatrix;
     
     const rx = opts.rx ?? 1.0;
@@ -57,52 +56,43 @@ export class ellipsoid {
     const vertices = [];
     const faces = [];
 
-    // Generate vertices WITH NORMALS
     for (let i = 0; i <= rings; i++) {
-      const u = -Math.PI / 2 + (i / rings) * Math.PI; // latitude -90 to 90
+      const u = -Math.PI / 2 + (i / rings) * Math.PI;
       const cu = Math.cos(u);
       const su = Math.sin(u);
 
       for (let j = 0; j <= segments; j++) {
-        const v = (j / segments) * 2 * Math.PI; // longitude 0 to 360
+        const v = (j / segments) * 2 * Math.PI; 
         const cv = Math.cos(v);
         const sv = Math.sin(v);
 
-        // Position
         const x = rx * cv * cu;
         const y = ry * su;
         const z = rz * sv * cu;
 
-        // Normal untuk ellipsoid: gradient dari x²/rx² + y²/ry² + z²/rz² = 1
-        // ∇f = (2x/rx², 2y/ry², 2z/rz²)
         let nx = x / (rx * rx);
         let ny = y / (ry * ry);
         let nz = z / (rz * rz);
         
-        // Normalize
         const nlen = Math.sqrt(nx*nx + ny*ny + nz*nz);
         if (nlen > 0) {
           nx /= nlen;
           ny /= nlen;
           nz /= nlen;
         }
-
-        // Push position
         vertices.push(x, y, z);
 
-        // Push color
+  
         if (color) {
           vertices.push(color[0], color[1], color[2]);
         } else {
           vertices.push((x / (2 * rx)) + 0.5, (y / (2 * ry)) + 0.5, (z / (2 * rz)) + 0.5);
         }
 
-        // Push normal
         vertices.push(nx, ny, nz);
       }
     }
 
-    // Build faces
     const rowLength = segments + 1;
     for (let i = 0; i < rings; i++) {
       for (let j = 0; j < segments; j++) {
@@ -154,11 +144,10 @@ export class ellipsoid {
 
     this.GL.bindBuffer(this.GL.ARRAY_BUFFER, this.OBJECT_VERTEX);
     
-    // Vertex format: [x,y,z, r,g,b, nx,ny,nz] = 9 floats = 36 bytes
     const stride = 36;
-    this.GL.vertexAttribPointer(this._position, 3, this.GL.FLOAT, false, stride, 0);   // offset 0
-    this.GL.vertexAttribPointer(this._color,    3, this.GL.FLOAT, false, stride, 12);  // offset 12
-    this.GL.vertexAttribPointer(this._normal,   3, this.GL.FLOAT, false, stride, 24);  // offset 24
+    this.GL.vertexAttribPointer(this._position, 3, this.GL.FLOAT, false, stride, 0);   
+    this.GL.vertexAttribPointer(this._color,    3, this.GL.FLOAT, false, stride, 12);  
+    this.GL.vertexAttribPointer(this._normal,   3, this.GL.FLOAT, false, stride, 24);
 
     this.GL.bindBuffer(this.GL.ELEMENT_ARRAY_BUFFER, this.OBJECT_FACES);
     this.GL.drawElements(this.GL.TRIANGLES, this.faces.length, this.GL.UNSIGNED_SHORT, 0);

@@ -13,7 +13,7 @@ export class BellyPatch {
   constructor(GL, SHADER_PROGRAM, _position, _color, _normal, _Mmatrix, opts={}) {
     this.GL=GL; this.SHADER_PROGRAM=SHADER_PROGRAM;
     this._position=_position; this._color=_color; this._normal=_normal;
-    this._MMatrix=_Mmatrix; // ⬅️ simpan UNIFORM LOCATION, jangan disentuh lagi!
+    this._MMatrix=_Mmatrix;
 
     this.widthTop    = opts.widthTop ?? (opts.width ?? 0.8);
     this.widthBottom = opts.widthBottom ?? (opts.width ?? 0.8);
@@ -127,8 +127,8 @@ export class BellyPatch {
 console.assert(this._MMatrix instanceof WebGLUniformLocation, "Mmatrix bukan uniform location!", this._MMatrix);
 
     GL.useProgram(this.SHADER_PROGRAM);
-    GL.uniformMatrix4fv(this._MMatrix,false,this.MODEL_MATRIX); // <- pakai uniform location yang valid
-
+    GL.uniformMatrix4fv(this._MMatrix,false,this.MODEL_MATRIX); 
+    
     const uNormalMatrix = GL.getUniformLocation(this.SHADER_PROGRAM,"normalMatrix");
     const n3 = LIBS.get_normal_matrix(this.MODEL_MATRIX);
     GL.uniformMatrix3fv(uNormalMatrix,false,n3);

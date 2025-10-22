@@ -1,15 +1,11 @@
-// mudkip-animation.js - FIXED VERSION
 export class MudkipAnimation {
   constructor(bodyParts, config = {}) {
     this.parts = {
       head: bodyParts.head,
       body: bodyParts.body,
       legs: bodyParts.legs,
-
-      
     };
 
-    // ===== TIMING (dalam detik) =====
     this.durations = {
       anticipation: 0.25,
       airborne:     0.50,
@@ -19,24 +15,24 @@ export class MudkipAnimation {
       anticipation2: 0.25,
       airborne2:     0.50,
       landing2:      0.30,
-      holdDown:      0.6,    // ← FIX: tambah ini (hilang!)
+      holdDown:      0.6,   
       
       anticipation3: 0.25,
       airborne3:     0.50,
       landing3:      0.20,
       holdFinal:     1.0,  
       
-      pawRaise:  0.4,    // naik
-      pawHold:   0.3,    // hold 1 detik
+      pawRaise:  0.4,  
+      pawHold:   0.3,   
       pawLower:  0.7,  
       
       pawRaise2: 0.4,
       pawHold2:  1.0,
       pawLower2: 0.7,
-      restHold:  2.0,  // turun bersamaan (kepala + kaki) 
+      restHold:  2.0, 
     };
 
-    // ===== JUMP PARAMETERS =====
+
     this.jump = {
       backwardDist: -1.8,
       forwardDist:  2.5,
@@ -45,11 +41,10 @@ export class MudkipAnimation {
       headDownTilt: 0.3,
       squashAmount: 0.15,
 
-      pawRaiseAngle: Math.PI / 4,  // 45° (π/4)
+      pawRaiseAngle: Math.PI / 4, 
       headTiltSide: 0.3,  
     };
 
-    // Animation data (CUMA 1x!)
     this.animData = {
       bodyOffset: { x: 0, y: 0, z: 0 },
       bodySquash: 1.0,
@@ -59,14 +54,12 @@ export class MudkipAnimation {
       pawRaise: { fl: 0, fr: 0, bl: 0, br: 0 },
     };
 
-    // State management
     this.phase = 'anticipation';
     this.phaseTime = 0;
     this.prevHeadTilt = 0;
     this.lastTime = performance.now();
   }
 
-  // ===== EASING FUNCTIONS =====
   easeInOutQuad(t) {
     return t < 0.5 ? 2*t*t : 1 - 2*(1-t)*(1-t);
   }
@@ -79,23 +72,19 @@ export class MudkipAnimation {
     return t*t;
   }
 
-  // ===== UPDATE =====
   update(timeMs) {
     const dt = (timeMs - this.lastTime) * 0.001;
     this.lastTime = timeMs;
-    
     this.phaseTime += dt;
     const duration = this.durations[this.phase];
-    
     if (this.phaseTime >= duration) {
       this.phaseTime = 0;
       this.nextPhase();
     }
-
     this.updateCurrentPhase();
   }
 
-  // ===== NEXT PHASE =====
+  
   nextPhase() {
   if (this.phase === 'anticipation') {
     this.phase = 'airborne';
@@ -121,31 +110,24 @@ export class MudkipAnimation {
     this.phase = 'holdFinal';
   } else if (this.phase === 'holdFinal') {
     this.phase = 'pawRaise';
-    
-  // ===== PAW SEQUENCE 1 =====
   } else if (this.phase === 'pawRaise') {
     this.phase = 'pawHold';
   } else if (this.phase === 'pawHold') {
     this.phase = 'pawLower';
   } else if (this.phase === 'pawLower') {
-    this.phase = 'pawRaise2';  // ← FIX: tambah transition ini!
-    
-  // ===== PAW SEQUENCE 2 =====
+    this.phase = 'pawRaise2'; 
   } else if (this.phase === 'pawRaise2') {
     this.phase = 'pawHold2';
   } else if (this.phase === 'pawHold2') {
     this.phase = 'pawLower2';
   } else if (this.phase === 'pawLower2') {
     this.phase = 'restHold';
-    
-  // ===== REST =====
   } else if (this.phase === 'restHold') {
-    this.phase = 'anticipation';  // stay forever
+    this.phase = 'anticipation';  
   }
 }
-  // ===== UPDATE CURRENT PHASE =====
+
   updateCurrentPhase() {
-    // Reset
     this.animData.bodyOffset = { x: 0, y: 0, z: 0 };
     this.animData.bodySquash = 1.0;
     this.animData.headTilt = { x: 0, y: 0, z: 0 };
@@ -157,14 +139,13 @@ export class MudkipAnimation {
     const d = this.durations[this.phase];
     const progress = Math.min(t / d, 1.0);
 
-    // ===== JUMP BACK 1 =====
     if (this.phase === 'anticipation') {
       const ease = this.easeInOutQuad(progress);
       this.animData.bodyOffset.y = -0.25 * ease;
       
     } else if (this.phase === 'airborne') {
       const horizEase = this.easeInOutQuad(progress);
-      this.animData.bodyOffset.z = this.jump.backwardDist * horizEase;  // ← FIX: .x bukan .z
+      this.animData.bodyOffset.z = this.jump.backwardDist * horizEase; 
       
       const arc = 4 * this.jump.height * progress * (1 - progress);
       this.animData.bodyOffset.y = -0.25 + arc;
@@ -182,7 +163,7 @@ export class MudkipAnimation {
       this.animData.legCurls = { fl: curlAmount, fr: curlAmount, bl: curlAmount, br: curlAmount };
       
     } else if (this.phase === 'landing') {
-      this.animData.bodyOffset.z = this.jump.backwardDist;  // ← FIX: .x
+      this.animData.bodyOffset.z = this.jump.backwardDist;  
       this.animData.bodyOffset.y = 0;
       
       this.animData.bodySquash = 1.0;
@@ -192,10 +173,9 @@ export class MudkipAnimation {
       this.animData.legCurls = { fl: bendAmount, fr: bendAmount, bl: bendAmount, br: bendAmount };
       
     } else if (this.phase === 'hold') {
-      this.animData.bodyOffset.z = this.jump.backwardDist;  // ← FIX: .x
+      this.animData.bodyOffset.z = this.jump.backwardDist;  
       this.animData.bodyOffset.y = 0;
       
-    // ===== JUMP FORWARD =====
     } else if (this.phase === 'anticipation2') {
       const ease = this.easeInOutQuad(progress);
       this.animData.bodyOffset.z = this.jump.backwardDist;
@@ -211,25 +191,18 @@ export class MudkipAnimation {
   const arc = 4 * this.jump.height * progress * (1 - progress);
   this.animData.bodyOffset.y = -0.25 + arc;
   
-  // ===== HEAD STRETCH (excited jump) =====
-  // Stretch paling tinggi di tengah jump (0.3-0.6)
   let stretchAmount = 0;
   if (progress < 0.3) {
-    // Naik ke peak stretch
     stretchAmount = progress / 0.3;
   } else if (progress < 0.6) {
-    // Hold at peak
     stretchAmount = 1.0;
   } else {
-    // Turun dari peak
     stretchAmount = 1.0 - (progress - 0.6) / 0.4;
   }
   
   const stretchCurve = this.easeInOutQuad(stretchAmount);
-  this.animData.headStretch = 0.2 * stretchCurve;  // stretch 0.25 unit
-  // =======================================
-  
-  // ===== HEAD TILT (mulai turun di second half) =====
+  this.animData.headStretch = 0.2 * stretchCurve;  
+
   if (progress < 0.5) {
     this.animData.headTilt.x = 0;
   } else {
@@ -254,7 +227,6 @@ export class MudkipAnimation {
   
   this.animData.bodySquash = 1.0;
   
-  // ===== HEAD TILT dengan DAMPED BOUNCE =====
   const startTilt = this.jump.headDownTilt * 0.6;
   const fullDown = this.jump.headDownTilt;
   const overshoot = this.jump.headDownTilt * 1.3;
@@ -276,19 +248,17 @@ export class MudkipAnimation {
     this.animData.headTilt.x = fullDown + oscillation * amplitude;
   }
   
-  // ===== SAVE HEAD TILT di akhir phase =====
   if (progress > 0.99) {
     this.prevHeadTilt = this.animData.headTilt.x;
   }
-  // =========================================
   
   const stretchEase = this.easeOutQuad(progress);
   this.animData.headStretch = 0.25 * (1 - stretchEase);
 }else if (this.phase === 'holdDown') {
   this.animData.bodyOffset.z = this.jump.forwardDist;
   this.animData.bodyOffset.y = 0;
-  this.animData.headTilt.x = this.jump.headDownTilt;  // stay down
-  this.animData.headStretch = 0;  // ← TAMBAH: no stretch saat hold
+  this.animData.headTilt.x = this.jump.headDownTilt; 
+  this.animData.headStretch = 0;  
 } else if (this.phase === 'anticipation3') {
       const ease = this.easeInOutQuad(progress);
       this.animData.bodyOffset.z = this.jump.forwardDist;
@@ -303,7 +273,7 @@ export class MudkipAnimation {
         const arc = 4 * this.jump.height * progress * (1 - progress);
         this.animData.bodyOffset.y = -0.25 + arc;
         const headEase = this.easeOutQuad(progress);
-        this.animData.headTilt.x = this.jump.headDownTilt * (1 - headEase);  // -0.15 → 0  
+        this.animData.headTilt.x = this.jump.headDownTilt * (1 - headEase);  
         let curlAmount = 0;
         if (progress < 0.25) {
             curlAmount = this.jump.legCurl * (progress / 0.25);
@@ -329,119 +299,89 @@ export class MudkipAnimation {
   
   const ease = this.easeInOutQuad(progress);
   
-  // ===== FIX 1: KEPALA TILT KIRI (positive Z) =====
+
   this.animData.headTilt.x = 0;
   this.animData.headTilt.y = 0;
-  this.animData.headTilt.z = this.jump.headTiltSide * ease;  // ← positive = tilt LEFT
-  // ===============================================
-  
-  // ===== FIX 2: KAKI KANAN DEPAN naik (bukan kiri) =====
-  this.animData.pawRaise.fl = 0;     // kiri depan: turun
-  this.animData.pawRaise.fr = ease;  // ← KANAN DEPAN: naik!
+  this.animData.headTilt.z = this.jump.headTiltSide * ease;
+  this.animData.pawRaise.fl = 0;     
+  this.animData.pawRaise.fr = ease; 
   this.animData.pawRaise.bl = 0;
   this.animData.pawRaise.br = 0;
-  // ====================================================
+
 } else if (this.phase === 'pawLower') {
   this.animData.bodyOffset.z = 0;
   this.animData.bodyOffset.y = 0;
   
   const easeDown = this.easeInOutQuad(progress);
-  
-  // ===== FIX 3: TURUN BERSAMAAN (kepala + kaki) =====
-  // Kepala: dari tilt kiri → netral
   this.animData.headTilt.x = 0;
   this.animData.headTilt.y = 0;
-  this.animData.headTilt.z = this.jump.headTiltSide * (1 - easeDown);  // ← POSITIVE (dari kiri)
-  
-  // Kaki kanan depan: dari atas → turun
+  this.animData.headTilt.z = this.jump.headTiltSide * (1 - easeDown); 
   this.animData.pawRaise.fl = 0;
-  this.animData.pawRaise.fr = 1.0 - easeDown;  // ← KANAN (fr), bukan kiri (fl)!
+  this.animData.pawRaise.fr = 1.0 - easeDown;  
   this.animData.pawRaise.bl = 0;
   this.animData.pawRaise.br = 0;
-  // ==============================================
+
 } else if (this.phase === 'pawHold') {
   this.animData.bodyOffset.z = 0;
   this.animData.bodyOffset.y = 0;
-  
-  // Kepala: stay tilt kiri
   this.animData.headTilt.x = 0;
   this.animData.headTilt.y = 0;
-  this.animData.headTilt.z = this.jump.headTiltSide;  // positive = tilt left
-  
-  // Kaki kanan depan: stay raised
+  this.animData.headTilt.z = this.jump.headTiltSide; 
   this.animData.pawRaise.fl = 0;
-  this.animData.pawRaise.fr = 1.0;  // ← kanan depan tetap naik
+  this.animData.pawRaise.fr = 1.0; 
   this.animData.pawRaise.bl = 0;
   this.animData.pawRaise.br = 0;
+
 } else if (this.phase === 'pawRaise2') {
-  // Angkat kaki KIRI + tilt kepala KANAN (mirror dari pawRaise)
   this.animData.bodyOffset.z = 0;
   this.animData.bodyOffset.y = 0;
-  
   const ease = this.easeInOutQuad(progress);
-  
-  // KEPALA: tilt ke KANAN (negative Z)
   this.animData.headTilt.x = 0;
   this.animData.headTilt.y = 0;
-  this.animData.headTilt.z = -this.jump.headTiltSide * ease;  // negative = tilt RIGHT
-  
-  // KAKI KIRI DEPAN: angkat
-  this.animData.pawRaise.fl = ease;  // KIRI naik
-  this.animData.pawRaise.fr = 0;     // kanan turun
+  this.animData.headTilt.z = -this.jump.headTiltSide * ease; 
+  this.animData.pawRaise.fl = ease;  
+  this.animData.pawRaise.fr = 0;     
   this.animData.pawRaise.bl = 0;
   this.animData.pawRaise.br = 0;
   
 } else if (this.phase === 'pawHold2') {
-  // Hold pose 2
   this.animData.bodyOffset.z = 0;
   this.animData.bodyOffset.y = 0;
-  
-  // Kepala: stay tilt kanan
   this.animData.headTilt.x = 0;
   this.animData.headTilt.y = 0;
-  this.animData.headTilt.z = -this.jump.headTiltSide;  // negative = tilt right
-  
-  // Kaki kiri: stay raised
-  this.animData.pawRaise.fl = 1.0;  // kiri tetap naik
+  this.animData.headTilt.z = -this.jump.headTiltSide;  
+  this.animData.pawRaise.fl = 1.0;  
   this.animData.pawRaise.fr = 0;
   this.animData.pawRaise.bl = 0;
   this.animData.pawRaise.br = 0;
   
 } else if (this.phase === 'pawLower2') {
-  // Turun bersamaan (kaki kiri + kepala)
   this.animData.bodyOffset.z = 0;
   this.animData.bodyOffset.y = 0;
-  
+
   const easeDown = this.easeInOutQuad(progress);
-  
-  // Kepala: dari tilt kanan → netral
   this.animData.headTilt.x = 0;
   this.animData.headTilt.y = 0;
-  this.animData.headTilt.z = -this.jump.headTiltSide * (1 - easeDown);  // -0.3 → 0
-  
-  // Kaki kiri: dari atas → turun
-  this.animData.pawRaise.fl = 1.0 - easeDown;  // kiri turun
+  this.animData.headTilt.z = -this.jump.headTiltSide * (1 - easeDown);  
+  this.animData.pawRaise.fl = 1.0 - easeDown;  
   this.animData.pawRaise.fr = 0;
   this.animData.pawRaise.bl = 0;
   this.animData.pawRaise.br = 0;
+
 } else if (this.phase === 'restHold') {
-  // Semua netral (stay forever)
   this.animData.bodyOffset.z = 0;
   this.animData.bodyOffset.y = 0;
-  
   this.animData.headTilt.x = 0;
   this.animData.headTilt.y = 0;
-  this.animData.headTilt.z = 0;  // netral
-  
+  this.animData.headTilt.z = 0;
   this.animData.pawRaise.fl = 0;
-  this.animData.pawRaise.fr = 0;  // turun
+  this.animData.pawRaise.fr = 0;  
   this.animData.pawRaise.bl = 0;
   this.animData.pawRaise.br = 0;
 }
-  }
+}
 
-  // ===== GET DATA =====
   getAnimationData() {
     return this.animData;
   }
-}  // ← CUMA 1 closing brace untuk class!
+}  

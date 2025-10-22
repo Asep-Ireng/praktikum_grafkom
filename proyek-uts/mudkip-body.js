@@ -49,7 +49,6 @@ export class mudkipBody {
     });
   }
 
-  // ===== bangun mesh + normal =====
   _buildMudkipBody({
     rx, ry, rz, segments, rings, color, vertexColor,
     flattenStartPhi, flattenStrength, flattenPlaneRatio,
@@ -84,14 +83,12 @@ export class mudkipBody {
           }
         }
 
-        // warna vertex
         let c = color;
         if (vertexColor) {
           c = vertexColor({x,y,z,theta:v,phi:u,longitudeIndex:j,latitudeIndex:i,segments,rings});
         }
         if (!c) c = [x/(2*rx)+.5, y/(2*ry)+.5, z/(2*rz)+.5];
 
-        // normal ellipsoid di titik (x,y,z)
         const nx = x / (rx*rx);
         const ny = y / (ry*ry);
         const nz = z / (rz*rz);
@@ -144,11 +141,8 @@ export class mudkipBody {
 
     const GL = this.GL;
     GL.useProgram(this.SHADER_PROGRAM);
-
-    // === kirim matrix utama ===
     GL.uniformMatrix4fv(this._MMatrix, false, this.MODEL_MATRIX);
 
-    // === kirim normalMatrix & lighting uniform ===
     const normalMat3 = LIBS.get_normal_matrix(this.MODEL_MATRIX);
     const uNormalMatrix = GL.getUniformLocation(this.SHADER_PROGRAM, "normalMatrix");
     const uLightDirection = GL.getUniformLocation(this.SHADER_PROGRAM, "lightDirection");
@@ -160,7 +154,6 @@ export class mudkipBody {
     GL.uniform3f(uLightColor, 1.0, 1.0, 1.0);
     GL.uniform3f(uViewPos, 0.0, 0.0, 3.0);
 
-    // === atribut: pos(3) + normal(3) + color(3) = 9 floats (stride 36) ===
     GL.bindBuffer(GL.ARRAY_BUFFER, this.OBJECT_VERTEX);
     GL.vertexAttribPointer(this._position, 3, GL.FLOAT, false, 36, 0);
     GL.vertexAttribPointer(this._normal,   3, GL.FLOAT, false, 36, 12);
