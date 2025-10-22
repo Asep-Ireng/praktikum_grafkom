@@ -8,6 +8,7 @@ import { BellyPatch } from "./belly-patch.js";
 import { BellyOutline } from "./belly-outline.js";
 import { MudkipTail } from "./mudkip-tail.js";
 import { MudkipAnimation } from "./mudkip-animation.js";
+import { Environment } from './environment/environment.js';
 
 
 function main() {
@@ -835,10 +836,10 @@ function applyLegCurl(leg, curlAmount) {
 
 function applyAnimation() {
   const anim = mudkipAnim.getAnimationData();
-  LIBS.set_I4(Rig.POSITION_MATRIX);
-  LIBS.translateX(Rig.POSITION_MATRIX, anim.bodyOffset.x);
-  LIBS.translateY(Rig.POSITION_MATRIX, anim.bodyOffset.y);
-  LIBS.translateZ(Rig.POSITION_MATRIX, anim.bodyOffset.z);
+LIBS.set_I4(MudkipRig.POSITION_MATRIX);  // ← GANTI dari Rig
+LIBS.translateX(MudkipRig.POSITION_MATRIX, anim.bodyOffset.x);
+LIBS.translateY(MudkipRig.POSITION_MATRIX, anim.bodyOffset.y);
+LIBS.translateZ(MudkipRig.POSITION_MATRIX, anim.bodyOffset.z);
   LIBS.set_I4(Badan.MOVE_MATRIX);
   if (anim.bodySquash !== 1.0) {
     LIBS.scale(Badan.MOVE_MATRIX, 1.0, anim.bodySquash, 1.0);
@@ -859,6 +860,49 @@ function applyAnimation() {
   applyPawRaise(BODY_PARTS.legs.backLeft,   anim.pawRaise.bl);
   applyPawRaise(BODY_PARTS.legs.backRight,  anim.pawRaise.br);
 }
+
+const environment = new Environment(
+  GL, 
+  SHADER_PROGRAM, 
+  _position, 
+  _color, 
+  _Mmatrix,
+  {
+    // === SKY CONFIG ===
+    skyTopColor: [135/255, 206/255, 250/255],    // biru langit
+    skyBottomColor: [200/255, 230/255, 255/255], // biru muda/putih
+    skySize: 50,
+
+    // === GROUND CONFIG ===
+    groundSize: 100,           // 100x100 units
+    groundSegments: 50,        // detail
+    muddyColor: [0.45, 0.35, 0.25],      // coklat lumpur
+    puddleColor: [0.25, 0.4, 0.55],      // biru genangan
+    heightVariation: 0.5,      // bumpy ground
+    puddleCount: 12,           // jumlah puddles
+
+    // === ROCKS CONFIG ===
+    rockCount: 20,                       // 20 batu
+    rockSizeRange: [0.5, 2.5],          // ukuran random
+    rockSpreadArea: 80,                  // area penyebaran
+    rockColor: [0.45, 0.45, 0.45],      // gray
+
+    // === FOUNTAIN CONFIG ===
+    enableFountain: true,      // set false kalau gak mau air terjun
+    fountainHeight: 8,         // tinggi air terjun
+    fountainWidth: 2,          // lebar
+    waterColor: [0.2, 0.5, 0.8],        // biru air
+    flowSpeed: 1.0,            // kecepatan animasi
+    fountainX: 15,             // posisi X (kanan)
+    fountainY: 3,              // posisi Y (tinggi)
+    fountainZ: -10,            // posisi Z (agak ke belakang)
+  }
+);
+
+const CameraRig = new group(_Mmatrix);  // untuk rotasi kamera
+const MudkipRig = new group(_Mmatrix);
+CameraRig.childs.push(MudkipRig);
+MudkipRig.childs.push(Badan);
 
 const Rig = new group(_Mmatrix);
 
@@ -885,10 +929,11 @@ Badan.childs.push(tail, kakiKiriDepan, kakiKananDepan, KakiKananBelakang, KakiKi
 BellyPatchDepan.childs.push(BellyLineBelakang);
 Badan.childs.push(BellyPatchDepan, OutlineKiri, OutlineKanan);
 
-Rig.childs.push(Badan);
+Rig.childs.push(environment);  // environment di-render pertama (background) 
+// Rig.childs.push(Badan);
 Badan.childs.push(Kepala);
 
-Rig.setup(); 
+CameraRig.setup(); 
 
     /*========================= MATRICES ========================= */
    
@@ -971,20 +1016,23 @@ Rig.setup();
     var time_prev = 0;
     var animate = function (time) {
         // ===== Viewport sudah correct dengan canvas actual size =====
+        const dt = (time - time_prev) * 0.001; // delta time in seconds
+    time_prev = time;
         GL.viewport(0, 0, CANVAS.width, CANVAS.height);
         GL.clear(GL.COLOR_BUFFER_BIT | GL.DEPTH_BUFFER_BIT);
       
         GL.uniformMatrix4fv(_Pmatrix, false, PROJMATRIX);
         GL.uniformMatrix4fv(_Vmatrix, false, VIEWMATRIX);
 
-        LIBS.set_I4(Rig.MOVE_MATRIX);
-        LIBS.rotateY(Rig.MOVE_MATRIX, THETA); 
-        LIBS.rotateX(Rig.MOVE_MATRIX, PHI); 
+        LIBS.set_I4(CameraRig.MOVE_MATRIX);      // ← GANTI dari Rig
+        LIBS.rotateY(CameraRig.MOVE_MATRIX, THETA);
+        LIBS.rotateX(CameraRig.MOVE_MATRIX, PHI);
+         environment.update(dt);
         updateTail(time);
         updateSiripTengah(time);
          mudkipAnim.update(time);
         applyAnimation();
-        Rig.render(LIBS.get_I4());
+        CameraRig.render(LIBS.get_I4());
 
         if (!drag) {
             dX *= (1 - FRICTION);
