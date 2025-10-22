@@ -1,13 +1,16 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <meta charset="UTF-8">
-    <script src="mega_swampert.js"></script>
-    <script src="libs.js"></script>
-    
+    <title>WebGL Waterfall Scene</title>
+    <style>
+        body { margin: 0; }
+        canvas { display: block; }
+    </style>
 </head>
-<body style="margin: 0">
-    <canvas id='mycanvas' style='display: block; width: 100%; height: 100%; background-color: black;'>
-</canvas>
+<body>
+    <canvas id="glcanvas" width="640" height="480"></canvas>
+    <script src="https://cdn.jsdelivr.net/npm/gl-matrix@3.4.4/gl-matrix-min.min.js"></script>
+    <script src="libs.js"></script>
+    <script src="main.js"></script>
 </body>
 </html>
