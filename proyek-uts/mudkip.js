@@ -860,19 +860,8 @@ function applyAnimation() {
   applyPawRaise(BODY_PARTS.legs.backRight,  anim.pawRaise.br);
 }
 
-
-
-
-
-
-
-
-// Hierarki
 const Rig = new group(_Mmatrix);
 
-// rig -> (badan, kepala)
-
-// kepala -> (mata, pipi, dagu)
 PipiKanan.childs.push(ConeKanan, ConeKananAtas, ConeKananBawah);
 PipiKiri.childs.push(ConeKiri, ConeKiriAtas, ConeKiriBawah);
 EyeL.childs.push(EyeL_Hi, EyeL_Sh); EyeR.childs.push(EyeR_Hi, EyeR_Sh);
@@ -899,7 +888,7 @@ Badan.childs.push(BellyPatchDepan, OutlineKiri, OutlineKanan);
 Rig.childs.push(Badan);
 Badan.childs.push(Kepala);
 
-Rig.setup(); // Setup rig sebagai root baru
+Rig.setup(); 
 
     /*========================= MATRICES ========================= */
    
