@@ -1,5 +1,5 @@
-// Hyperboloid.js
-export class Hyperboloid {
+// Cone.js
+export class Cone {
     GL = null;
     SHADER_PROGRAM = null;
     _position = null;
@@ -18,7 +18,7 @@ export class Hyperboloid {
 
     POSITION_MATRIX = null;
     MOVE_MATRIX = null;
-
+    
     childs = [];
 
     constructor(GL, LIBS, SHADER_PROGRAM, locations, opts = {}) {
@@ -31,20 +31,15 @@ export class Hyperboloid {
         this._Nmatrix = locations._Nmatrix;
         this._u_color = locations._u_color;
         this._shininess = locations._shininess;
-        
+
         this.POSITION_MATRIX = this.LIBS.get_I4();
         this.MOVE_MATRIX = this.LIBS.get_I4();
 
-        const a = opts.a ?? 0.2;
-        const c = opts.c ?? 0.2;
+        const radius = opts.radius ?? 0.5;
         const height = opts.height ?? 1.0;
-        const stacks = opts.stacks ?? 30;
-        const sectors = opts.sectors ?? 30;
+        const segments = opts.segments ?? 20;
         this.color = opts.color ?? [0.5, 0.5, 0.5, 1.0];
         this.shininess = opts.shininess ?? 10.0;
-        
-        const u_min = opts.u_min ?? -1.0;
-        const u_max = opts.u_max ?? 1.0;
 
         this.LIBS.translateX(this.POSITION_MATRIX, opts.x ?? 0);
         this.LIBS.translateY(this.POSITION_MATRIX, opts.y ?? 0);
@@ -53,40 +48,25 @@ export class Hyperboloid {
         this.LIBS.rotateY(this.POSITION_MATRIX, opts.ry ?? 0);
         this.LIBS.rotateZ(this.POSITION_MATRIX, opts.rz ?? 0);
 
-        this._buildGeometry(a, c, height, stacks, sectors, u_min, u_max);
+        this._buildGeometry(radius, height, segments);
     }
-
-    _buildGeometry(a, c, height, stacks, sectors, u_min, u_max) {
-        for (let i = 0; i <= stacks; i++) {
-            const u_ratio = i / stacks;
-            const u = u_min + u_ratio * (u_max - u_min);
-
-            for (let j = 0; j <= sectors; j++) {
-                const v_ratio = j / sectors;
-                const v = -Math.PI + v_ratio * (Math.PI * 2);
-
-                // Persamaan parametrik untuk Hyperboloid
-                const x = a * Math.cosh(u) * Math.cos(v);
-                const y = height * Math.sinh(u); // Sumbu Y sebagai tinggi
-                const z = c * Math.cosh(u) * Math.sin(v);
-                this.vertices.push(x, y, z);
-
-                // Normal untuk hyperboloid
-                const nx = (2 * x) / (a * a);
-                const ny = (-2 * y) / (height * height);
-                const nz = (2 * z) / (c * c);
-                const len = Math.sqrt(nx*nx + ny*ny + nz*nz);
-                this.normals.push(nx/len, ny/len, nz/len);
-            }
+    
+    _buildGeometry(radius, height, segments) {
+        this.vertices.push(0, height, 0);
+        this.normals.push(0, 1, 0);
+        this.vertices.push(0, 0, 0);
+        this.normals.push(0, -1, 0);
+        for (let i = 0; i <= segments; i++) {
+            const angle = (i / segments) * 2 * Math.PI;
+            const x = radius * Math.cos(angle);
+            const z = radius * Math.sin(angle);
+            this.vertices.push(x, 0, z);
+            const normal = [height * x, radius * radius, height * z];
+            const len = Math.sqrt(normal[0]**2 + normal[1]**2 + normal[2]**2);
+            this.normals.push(normal[0]/len, normal[1]/len, normal[2]/len);
         }
-
-        for (let i = 0; i < stacks; i++) {
-            for (let j = 0; j < sectors; j++) {
-                const first = i * (sectors + 1) + j;
-                const second = first + sectors + 1;
-                this.indices.push(first, second, first + 1);
-                this.indices.push(second, second + 1, first + 1);
-            }
+        for (let i = 0; i < segments; i++) {
+            this.indices.push(0, 2 + i, 2 + i + 1);
         }
     }
 
@@ -106,12 +86,12 @@ export class Hyperboloid {
         this.childs.forEach(child => child.setup());
     }
 
-    render(PARENT_MATRIX, PARENT_NORMAL_MATRIX) { 
+    render(PARENT_MATRIX, PARENT_NORMAL_MATRIX) {
         const MODEL_MATRIX = this.LIBS.get_I4();
         this.LIBS.mul(MODEL_MATRIX, PARENT_MATRIX, this.POSITION_MATRIX);
         this.LIBS.mul(MODEL_MATRIX, MODEL_MATRIX, this.MOVE_MATRIX);
 
-        const NORMAL_MATRIX = this.LIBS.get_I4();
+        const NORMAL_MATRIX = this.LIBS.getNormalMatrix(MODEL_MATRIX);
         this.LIBS.mul(NORMAL_MATRIX, PARENT_NORMAL_MATRIX, this.POSITION_MATRIX);
         this.LIBS.mul(NORMAL_MATRIX, NORMAL_MATRIX, this.MOVE_MATRIX);
         

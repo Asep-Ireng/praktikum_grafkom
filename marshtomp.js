@@ -1,408 +1,705 @@
-// --- FUNGSI UNTUK MEMBUAT GEOMETRI CYLINDER/DISK ---
-function generateCylinder(radius, height, segments) {
-    const vertices = [];
-    const normals = [];
-    const indices = [];
-    let vertexIndex = 0;
+import { Ellipsoid } from '../Ellipsoid.js';
+import { Cone } from '../Cone.js';
+import { Hyperboloid } from '../Hyperboloid.js';
+import { Lathe } from '../Lathe.js';
+import { Fin } from '../Fin.js';
+import { Cube } from './Cube.js';
+import { Cylinder } from './Cylinder.js';
+import { Arm } from './Arm.js';
+import { FinSpline } from './FinSpline.js';
 
-    // Sisi Atas (Top Cap)
-    vertices.push(0, height / 2, 0); // Titik tengah atas
-    normals.push(0, 1, 0);
-    vertexIndex++;
-    for (let i = 0; i <= segments; i++) {
-        const angle = (i / segments) * 2 * Math.PI;
-        const x = radius * Math.cos(angle);
-        const z = radius * Math.sin(angle);
-        vertices.push(x, height / 2, z);
-        normals.push(0, 1, 0);
-        vertexIndex++;
-    }
-    for (let i = 0; i < segments; i++) {
-        indices.push(0, i + 1, i + 2);
-    }
-
-    // Sisi Bawah (Bottom Cap)
-    const bottomCenterIndex = vertexIndex;
-    vertices.push(0, -height / 2, 0); // Titik tengah bawah
-    normals.push(0, -1, 0);
-    vertexIndex++;
-    for (let i = 0; i <= segments; i++) {
-        const angle = (i / segments) * 2 * Math.PI;
-        const x = radius * Math.cos(angle);
-        const z = radius * Math.sin(angle);
-        vertices.push(x, -height / 2, z);
-        normals.push(0, -1, 0);
-        vertexIndex++;
-    }
-    for (let i = 0; i < segments; i++) {
-        indices.push(bottomCenterIndex, bottomCenterIndex + i + 2, bottomCenterIndex + i + 1);
-    }
-    return { vertices, normals, indices };
-}
-
-// --- FUNGSI UNTUK MEMBUAT GEOMETRI ELLIPSOID ---
-// Dimodifikasi untuk menghasilkan vertices, normals, dan indices secara terpisah
-function generateSphere(a, b, c, stacks, sectors) {
-    var vertices = [];
-    var normals = [];
-    var indices = [];
-
-    for (var i = 0; i <= stacks; i++) {
-        var u = i / stacks * Math.PI - (Math.PI / 2); // Latitude
-        for (var j = 0; j <= sectors; j++) {
-            var v = j / sectors * 2 * Math.PI - Math.PI; // Longitude
-
-            // Posisi vertex
-            var x = a * Math.cos(v) * Math.cos(u);
-            var y = b * Math.sin(u);
-            var z = c * Math.sin(v) * Math.cos(u);
-            vertices.push(x, y, z);
-
-            // Normal untuk ellipsoid (penting untuk pencahayaan)
-            var nx = x / (a * a);
-            var ny = y / (b * b);
-            var nz = z / (c * c);
-            var len = Math.sqrt(nx * nx + ny * ny + nz * nz);
-            normals.push(nx / len, ny / len, nz / len);
-        }
-    }
-
-    // Indices (faces)
-    for (var i = 0; i < stacks; i++) {
-        for (var j = 0; j < sectors; j++) {
-            var first = i * (sectors + 1) + j;
-            var second = first + 1;
-            var third = first + (sectors + 1);
-            var fourth = third + 1;
-            indices.push(first, second, fourth);
-            indices.push(first, fourth, third);
-        }
-    }
-    return { vertices, normals, indices };
-}
-
-// --- FUNGSI UNTUK MEMBUAT GEOMETRI CONE ---
-// Dimodifikasi agar lebih ringkas dan benar
-function generateCone(radius, height, segments) {
-    const vertices = [];
-    const normals = [];
-    const indices = [];
-
-    // Titik puncak (apex)
-    vertices.push(0, height, 0);
-    normals.push(0, 1, 0);
-
-    // Titik tengah alas
-    vertices.push(0, 0, 0);
-    normals.push(0, -1, 0);
-
-    // Titik-titik di sekeliling alas
-    for (let i = 0; i <= segments; i++) {
-        const angle = (i / segments) * 2 * Math.PI;
-        const x = radius * Math.cos(angle);
-        const z = radius * Math.sin(angle);
-        vertices.push(x, 0, z);
-        
-        // Normal untuk sisi cone
-        const normal = [height * x, radius * radius, height * z];
-        const len = Math.sqrt(normal[0]**2 + normal[1]**2 + normal[2]**2);
-        normals.push(normal[0]/len, normal[1]/len, normal[2]/len);
-    }
-    
-    // Indices untuk sisi cone (dari puncak ke alas)
-    for (let i = 0; i < segments; i++) {
-        indices.push(0, 2 + i, 2 + i + 1);
-    }
-    return { vertices, normals, indices };
-}
-
-// --- FUNGSI UTAMA ---
 function main() {
-    /** @type {HTMLCanvasElement} */
-    var CANVAS = document.getElementById("mycanvas");
-    CANVAS.width = window.innerWidth;
-    CANVAS.height = window.innerHeight;
+  const CANVAS = document.getElementById("mycanvas");
+  CANVAS.width = window.innerWidth;
+  CANVAS.height = window.innerHeight;
+  
+  // ✅ Konteks WebGL disederhanakan, tidak perlu alpha
+  const GL = CANVAS.getContext("webgl", { 
+    antialias: true,
+    alpha: false,
+    premultipliedAlpha: false
+  });
+  
+  if (!GL) {
+    alert("WebGL context cannot be initialized");
+    return;
+  }
 
-    var GL;
-    try {
-        GL = CANVAS.getContext("webgl", { antialias: true });
-    } catch (e) { alert("WebGL context cannot be initialized"); return false; }
+  const shader_vertex_source = `
+    attribute vec3 position;
+    attribute vec3 normal;
+    uniform mat4 Pmatrix, Vmatrix, Mmatrix, Nmatrix;
+    varying vec3 v_normal, v_surfaceToLight, v_surfaceToView;
+    uniform vec3 u_lightPosition, u_cameraPosition;
+    void main(void){
+      vec3 worldPosition = (Mmatrix * vec4(position,1.0)).xyz;
+      gl_Position = Pmatrix * Vmatrix * vec4(worldPosition,1.0);
+      v_normal = (Nmatrix * vec4(normal,0.0)).xyz;
+      v_surfaceToLight = u_lightPosition - worldPosition;
+      v_surfaceToView  = u_cameraPosition - worldPosition;
+    }`;
 
-    /*========================= SHADERS ========================= */
-    var shader_vertex_source = `
-        attribute vec3 position;
-        attribute vec3 normal;
-        uniform mat4 Pmatrix, Vmatrix, Mmatrix, Nmatrix;
-        varying vec3 v_normal, v_surfaceToLight, v_surfaceToView;
-        uniform vec3 u_lightPosition, u_cameraPosition;
+  const shader_fragment_source = `
+    precision mediump float;
+    varying vec3 v_normal, v_surfaceToLight, v_surfaceToView;
+    uniform vec4 u_color;
+    uniform float u_shininess;
+    void main(void){
+      vec3 n = normalize(v_normal);
+      vec3 l = normalize(v_surfaceToLight);
+      vec3 v = normalize(v_surfaceToView);
+      vec3 h = normalize(l + v);
+      float ndotl = max(dot(n,l), 0.0);
+      float spec  = pow(max(dot(n,h), 0.0), u_shininess);
+      float rim   = pow(1.0 - max(dot(n,v), 0.0), 2.0) * 0.35;
+      vec3 ambient  = 0.22 * u_color.rgb;
+      vec3 diffuse  = u_color.rgb * ndotl;
+      vec3 specular = vec3(0.8) * spec;
+      vec3 linear   = ambient + diffuse + specular + u_color.rgb * rim;
+      vec3 srgb = pow(clamp(linear, 0.0, 1.0), vec3(1.0/2.2));
+      gl_FragColor = vec4(srgb, u_color.a);
+    }`;
 
-        void main(void) {
-            vec3 worldPosition = (Mmatrix * vec4(position, 1.0)).xyz;
-            gl_Position = Pmatrix * Vmatrix * vec4(worldPosition, 1.0);
-            v_normal = (Nmatrix * vec4(normal, 0.0)).xyz;
-            v_surfaceToLight = u_lightPosition - worldPosition;
-            v_surfaceToView = u_cameraPosition - worldPosition;
-        }`;
+  function compile_shader(src, type, label) {
+    const sh = GL.createShader(type);
+    GL.shaderSource(sh, src);
+    GL.compileShader(sh);
+    if (!GL.getShaderParameter(sh, GL.COMPILE_STATUS)) {
+      alert("ERROR IN " + label + " SHADER: " + GL.getShaderInfoLog(sh));
+      return null;
+    }
+    return sh;
+  }
 
-    var shader_fragment_source = `
-        precision mediump float;
-        varying vec3 v_normal, v_surfaceToLight, v_surfaceToView;
-        uniform vec4 u_color;
-        uniform float u_shininess;
+  const shader_vertex = compile_shader(shader_vertex_source, GL.VERTEX_SHADER, "VERTEX");
+  const shader_fragment = compile_shader(shader_fragment_source, GL.FRAGMENT_SHADER, "FRAGMENT");
+  const SHADER_PROGRAM = GL.createProgram();
+  GL.attachShader(SHADER_PROGRAM, shader_vertex);
+  GL.attachShader(SHADER_PROGRAM, shader_fragment);
+  GL.linkProgram(SHADER_PROGRAM);
 
-        void main(void) {
-            vec3 normal = normalize(v_normal);
-            vec3 surfaceToLight = normalize(v_surfaceToLight);
-            vec3 surfaceToView = normalize(v_surfaceToView);
-            vec3 halfVector = normalize(surfaceToLight + surfaceToView);
-            
-            float diffuseBrightness = max(dot(normal, surfaceToLight), 0.0);
-            vec3 diffuse = u_color.rgb * diffuseBrightness;
-            
-            float specularBrightness = pow(max(dot(normal, halfVector), 0.0), u_shininess);
-            vec3 specular = vec3(0.8, 0.8, 0.8) * specularBrightness;
+  const locations = {
+    _Pmatrix: GL.getUniformLocation(SHADER_PROGRAM, "Pmatrix"),
+    _Vmatrix: GL.getUniformLocation(SHADER_PROGRAM, "Vmatrix"),
+    _Mmatrix: GL.getUniformLocation(SHADER_PROGRAM, "Mmatrix"),
+    _Nmatrix: GL.getUniformLocation(SHADER_PROGRAM, "Nmatrix"),
+    _u_color: GL.getUniformLocation(SHADER_PROGRAM, "u_color"),
+    _shininess: GL.getUniformLocation(SHADER_PROGRAM, "u_shininess"),
+    _lightPosition: GL.getUniformLocation(SHADER_PROGRAM, "u_lightPosition"),
+    _cameraPosition: GL.getUniformLocation(SHADER_PROGRAM, "u_cameraPosition"),
+    _position: GL.getAttribLocation(SHADER_PROGRAM, "position"),
+    _normal: GL.getAttribLocation(SHADER_PROGRAM, "normal")
+  };
+  GL.enableVertexAttribArray(locations._position);
+  GL.enableVertexAttribArray(locations._normal);
+  GL.useProgram(SHADER_PROGRAM);
 
-            vec3 ambient = vec3(0.2, 0.2, 0.2) * u_color.rgb;
-            
-            gl_FragColor = vec4(ambient + diffuse + specular, u_color.a);
-        }`;
+  // ✅ State GL untuk Objek Solid
+  GL.enable(GL.DEPTH_TEST);
+  GL.depthFunc(GL.LEQUAL);
+  GL.enable(GL.CULL_FACE);
+  GL.cullFace(GL.BACK);
+  GL.disable(GL.BLEND);        // Blending MATI
+  GL.depthMask(true);           // Depth writing NYALA
+  GL.clearColor(0.1, 0.15, 0.2, 1);
 
-    var compile_shader = function (source, type, typeString) {
-        var shader = GL.createShader(type);
-        GL.shaderSource(shader, source);
-        GL.compileShader(shader);
-        if (!GL.getShaderParameter(shader, GL.COMPILE_STATUS)) {
-            alert("ERROR IN " + typeString + " SHADER: " + GL.getShaderInfoLog(shader));
-            return false;
-        }
-        return shader;
-    };
-    var shader_vertex = compile_shader(shader_vertex_source, GL.VERTEX_SHADER, "VERTEX");
-    var shader_fragment = compile_shader(shader_fragment_source, GL.FRAGMENT_SHADER, "FRAGMENT");
-    var SHADER_PROGRAM = GL.createProgram();
-    GL.attachShader(SHADER_PROGRAM, shader_vertex);
-    GL.attachShader(SHADER_PROGRAM, shader_fragment);
-    GL.linkProgram(SHADER_PROGRAM);
+  // ======================== OBJECTS ========================
+  const badan = new Ellipsoid(GL, LIBS, SHADER_PROGRAM, locations, {
+    a: 1.1, b: 1.2, c: 0.8,
+    color: [85/255, 185/255, 235/255, 1],
+    shininess: 20.0,
+    v_min: Math.PI / 4,     // ✅ Fix Z-Fighting
+    v_max: 2 * Math.PI - (Math.PI / 4)
+  });
 
-    // --- LOKASI ATTRIBUTE & UNIFORM ---
-    var _Pmatrix = GL.getUniformLocation(SHADER_PROGRAM, "Pmatrix");
-    var _Vmatrix = GL.getUniformLocation(SHADER_PROGRAM, "Vmatrix");
-    var _Mmatrix = GL.getUniformLocation(SHADER_PROGRAM, "Mmatrix");
-    var _Nmatrix = GL.getUniformLocation(SHADER_PROGRAM, "Nmatrix");
-    var _u_color = GL.getUniformLocation(SHADER_PROGRAM, "u_color");
-    var _shininess = GL.getUniformLocation(SHADER_PROGRAM, "u_shininess");
-    var _lightPosition = GL.getUniformLocation(SHADER_PROGRAM, "u_lightPosition");
-    var _cameraPosition = GL.getUniformLocation(SHADER_PROGRAM, "u_cameraPosition");
-    var _position = GL.getAttribLocation(SHADER_PROGRAM, "position");
-    var _normal = GL.getAttribLocation(SHADER_PROGRAM, "normal");
-    
-    GL.enableVertexAttribArray(_position);
-    GL.enableVertexAttribArray(_normal);
-    GL.useProgram(SHADER_PROGRAM);
+  const kepalaAtas = new Ellipsoid(GL, LIBS, SHADER_PROGRAM, locations, {
+    a: 1.0, b: 0.8, c: 0.75,
+    color: [85/255, 185/255, 235/255, 1],
+    shininess: 30,
+    stack: 200,
+    sectors: 200,
+    y: 1.5,
+    v_min: Math.PI / 4,     // ✅ Fix Z-Fighting
+    v_max: 2 * Math.PI - (Math.PI / 4)
+  });
 
-    /*======================== MEMBUAT GEOMETRI ======================== */
-    const kepala = generateSphere(1.0, 0.8, 0.7, 50, 50);
-    const pipi = generateCone(0.2, 1.2, 20);
-    const alasPipi = generateSphere(0.3, 0.02, 0.3, 30, 30); 
+  const daguBawah = new Ellipsoid(GL, LIBS, SHADER_PROGRAM, locations, {
+    a: 1.0, b: 0.81, c: 0.75,
+    color: [173/255, 216/255, 230/255, 1],
+    shininess: 30,
+    stack: 200,
+    sectors: 200,
+    u_min: -Math.PI/2,
+    u_max: -Math.PI/12,
+    v_min: 0,
+    v_max: Math.PI
+  });
 
-    // --- BUFFERS UNTUK KEPALA ---
-    var KEPALA_VERTEX_BUFFER = GL.createBuffer();
-    GL.bindBuffer(GL.ARRAY_BUFFER, KEPALA_VERTEX_BUFFER);
-    GL.bufferData(GL.ARRAY_BUFFER, new Float32Array(kepala.vertices), GL.STATIC_DRAW);
-    var KEPALA_NORMAL_BUFFER = GL.createBuffer();
-    GL.bindBuffer(GL.ARRAY_BUFFER, KEPALA_NORMAL_BUFFER);
-    GL.bufferData(GL.ARRAY_BUFFER, new Float32Array(kepala.normals), GL.STATIC_DRAW);
-    var KEPALA_FACES_BUFFER = GL.createBuffer();
-    GL.bindBuffer(GL.ELEMENT_ARRAY_BUFFER, KEPALA_FACES_BUFFER);
-    GL.bufferData(GL.ELEMENT_ARRAY_BUFFER, new Uint16Array(kepala.indices), GL.STATIC_DRAW);
+  const lingkaranPipiKanan = new Ellipsoid(GL, LIBS, SHADER_PROGRAM, locations, {
+    a: 0.5, b: 0.3, c: 0.5,
+    color: [1, 150/255, 100/255, 1],
+    shininess: 10,
+    x: 0.7,
+    rz: LIBS.degToRad(-90),
+    ry: LIBS.degToRad(-15)
+  });
 
-    // --- BUFFERS UNTUK PIPI ---
-    var PIPI_VERTEX_BUFFER = GL.createBuffer();
-    GL.bindBuffer(GL.ARRAY_BUFFER, PIPI_VERTEX_BUFFER);
-    GL.bufferData(GL.ARRAY_BUFFER, new Float32Array(pipi.vertices), GL.STATIC_DRAW);
-    var PIPI_NORMAL_BUFFER = GL.createBuffer();
-    GL.bindBuffer(GL.ARRAY_BUFFER, PIPI_NORMAL_BUFFER);
-    GL.bufferData(GL.ARRAY_BUFFER, new Float32Array(pipi.normals), GL.STATIC_DRAW);
-    var PIPI_FACES_BUFFER = GL.createBuffer();
-    GL.bindBuffer(GL.ELEMENT_ARRAY_BUFFER, PIPI_FACES_BUFFER);
-    GL.bufferData(GL.ELEMENT_ARRAY_BUFFER, new Uint16Array(pipi.indices), GL.STATIC_DRAW);
+  const lingkaranPipiKiri = new Ellipsoid(GL, LIBS, SHADER_PROGRAM, locations, {
+    a: 0.5, b: 0.3, c: 0.5,
+    color: [1, 150/255, 100/255, 1],
+    shininess: 10,
+    x: -0.7,
+    rz: LIBS.degToRad(90),
+    ry: LIBS.degToRad(15)
+  });
 
-    // --- BUFFERS UNTUK ALAS PIPI ---
-    var ALAS_PIPI_VERTEX_BUFFER = GL.createBuffer();
-    GL.bindBuffer(GL.ARRAY_BUFFER, ALAS_PIPI_VERTEX_BUFFER);
-    GL.bufferData(GL.ARRAY_BUFFER, new Float32Array(alasPipi.vertices), GL.STATIC_DRAW);
+  const pipiKanan = new Cone(GL, LIBS, SHADER_PROGRAM, locations, {
+    radius: 0.2,
+    height: 0.9,
+    color: [1, 150/255, 100/255, 1],
+    shininess: 10,
+    x: 0.95,
+    rz: LIBS.degToRad(-90),
+    ry: LIBS.degToRad(-15)
+  });
 
-    var ALAS_PIPI_NORMAL_BUFFER = GL.createBuffer();
-    GL.bindBuffer(GL.ARRAY_BUFFER, ALAS_PIPI_NORMAL_BUFFER);
-    GL.bufferData(GL.ARRAY_BUFFER, new Float32Array(alasPipi.normals), GL.STATIC_DRAW);
+  const pipiKiri = new Cone(GL, LIBS, SHADER_PROGRAM, locations, {
+    radius: 0.2,
+    height: 0.9,
+    color: [1, 150/255, 100/255, 1],
+    shininess: 10,
+    x: -0.95,
+    rz: LIBS.degToRad(90),
+    ry: LIBS.degToRad(15)
+  });
 
-    var ALAS_PIPI_FACES_BUFFER = GL.createBuffer();
-    GL.bindBuffer(GL.ELEMENT_ARRAY_BUFFER, ALAS_PIPI_FACES_BUFFER);
-    GL.bufferData(GL.ELEMENT_ARRAY_BUFFER, new Uint16Array(alasPipi.indices), GL.STATIC_DRAW);
+  const mataKanan = new Ellipsoid(GL, LIBS, SHADER_PROGRAM, locations, {
+    a: 0.2, b: 0.25, c: 0.05,
+    color: [1, 150/255, 100/255, 1],
+    shininess: 10,
+    x: 0.4, y: 0.2, z: 0.63,
+    rx: LIBS.degToRad(-16),
+    ry: LIBS.degToRad(20)
+  });
 
-    /*======================== PENGATURAN MATRIKS DAN KAMERA ======================== */
-    var PROJMATRIX = LIBS.get_projection(40, CANVAS.width / CANVAS.height, 1, 100);
-    var MOVEMATRIX_KEPALA = LIBS.get_I4();
-    var VIEWMATRIX = LIBS.get_I4();
-    const cameraPosition = [0, 0, 8];
-    LIBS.translateZ(VIEWMATRIX, -cameraPosition[2]);
+  const pupilKanan = new Ellipsoid(GL, LIBS, SHADER_PROGRAM, locations, {
+    a: 0.1, b: 0.12, c: 0.05,
+    color: [0, 0, 0, 1],
+    shininess: 5,
+    z: 0.01
+  });
 
-    /*========================= KONTROL DAN INTERAKSI ========================= */
-    var THETA = 0, PHI = 0;
-    var drag = false;
-    var x_prev, y_prev;
-    var dX = 0, dY = 0;
-    var mouseDown = function(e){drag=true; x_prev=e.pageX, y_prev=e.pageY; e.preventDefault(); return false;};
-    var mouseUp = function(e){drag=false;};
-    var mouseMove = function(e){if(!drag){return false;} dX=(e.pageX-x_prev)*2*Math.PI/CANVAS.width, dY=(e.pageY-y_prev)*2*Math.PI/CANVAS.height; THETA+=dX; PHI+=dY; x_prev=e.pageX, y_prev=e.pageY; e.preventDefault();};
-    CANVAS.addEventListener("mousedown", mouseDown, false);
-    CANVAS.addEventListener("mouseup", mouseUp, false);
-    CANVAS.addEventListener("mouseout", mouseUp, false);
-    CANVAS.addEventListener("mousemove", mouseMove, false);
+  const kilauMataKanan = new Ellipsoid(GL, LIBS, SHADER_PROGRAM, locations, {
+    a: 0.04, b: 0.04, c: 0.05,
+    color: [1, 1, 1, 1],
+    shininess: 100,
+    x: -0.03, y: 0.04, z: 0.02
+  });
 
-    /*========================= DRAWING ========================= */
-    GL.enable(GL.DEPTH_TEST);
-    GL.depthFunc(GL.LEQUAL);
-    GL.clearColor(0.1, 0.15, 0.2, 1.0);
-    GL.clearDepth(1.0);
+  const mataKiri = new Ellipsoid(GL, LIBS, SHADER_PROGRAM, locations, {
+    a: 0.2, b: 0.25, c: 0.05,
+    color: [1, 150/255, 100/255, 1],
+    shininess: 10,
+    x: -0.4, y: 0.2, z: 0.63,
+    rx: LIBS.degToRad(-16),
+    ry: LIBS.degToRad(-20)
+  });
 
-    var animate = function (time) {
-        GL.viewport(0, 0, CANVAS.width, CANVAS.height);
-        GL.clear(GL.COLOR_BUFFER_BIT | GL.DEPTH_BUFFER_BIT);
+  const pupilKiri = new Ellipsoid(GL, LIBS, SHADER_PROGRAM, locations, {
+    a: 0.1, b: 0.12, c: 0.05,
+    color: [0, 0, 0, 1],
+    shininess: 5,
+    z: 0.01
+  });
 
-        if (!drag) {
-            dX *= 0.95; dY *= 0.95;
-            THETA += dX; PHI += dY;
-        }
+  const kilauMataKiri = new Ellipsoid(GL, LIBS, SHADER_PROGRAM, locations, {
+    a: 0.04, b: 0.04, c: 0.05,
+    color: [1, 1, 1, 1],
+    shininess: 100,
+    x: 0.03, y: 0.04, z: 0.02
+  });
 
-        GL.uniformMatrix4fv(_Pmatrix, false, PROJMATRIX);
-        GL.uniformMatrix4fv(_Vmatrix, false, VIEWMATRIX);
-        GL.uniform3fv(_lightPosition, [5.0, 5.0, 8.0]);
-        GL.uniform3fv(_cameraPosition, cameraPosition);
+  const hidungKanan = new Ellipsoid(GL, LIBS, SHADER_PROGRAM, locations, {
+    a: 0.05, b: 0.015, c: 0.01,
+    color: [0.1, 0.1, 0.1, 1],
+    shininess: 5,
+    x: 0.15, y: -0.05, z: 0.74,
+    rz: LIBS.degToRad(45)
+  });
 
-        // --- 1. GAMBAR KEPALA (PARENT) ---
-        var MOVEMATRIX_KEPALA = LIBS.get_I4();
-        LIBS.rotateY(MOVEMATRIX_KEPALA, THETA);
-        LIBS.rotateX(MOVEMATRIX_KEPALA, PHI);
-        GL.uniformMatrix4fv(_Mmatrix, false, MOVEMATRIX_KEPALA);
+  const hidungKiri = new Ellipsoid(GL, LIBS, SHADER_PROGRAM, locations, {
+    a: 0.05, b: 0.015, c: 0.01,
+    color: [0.1, 0.1, 0.1, 1],
+    shininess: 5,
+    x: -0.15, y: -0.05, z: 0.74,
+    rz: LIBS.degToRad(-45)
+  });
 
-        var NORMALMATRIX_KEPALA = LIBS.get_I4();
-        LIBS.rotateY(NORMALMATRIX_KEPALA, THETA);
-        LIBS.rotateX(NORMALMATRIX_KEPALA, PHI);
-        GL.uniformMatrix4fv(_Nmatrix, false, NORMALMATRIX_KEPALA);
-        
-        GL.uniform4f(_u_color, 85/255, 185/255, 235/255, 1.0);
-        GL.uniform1f(_shininess, 30.0);
+  const senyum = new Ellipsoid(GL, LIBS, SHADER_PROGRAM, locations, {
+    a: 0.87, b: 0.02, c: 0.54,
+    color: [0.1, 0.1, 0.1, 1],
+    shininess: 5,
+    y: -0.2, z: 0.2
+  });
 
-        GL.bindBuffer(GL.ARRAY_BUFFER, KEPALA_VERTEX_BUFFER);
-        GL.vertexAttribPointer(_position, 3, GL.FLOAT, false, 0, 0);
-        GL.bindBuffer(GL.ARRAY_BUFFER, KEPALA_NORMAL_BUFFER);
-        GL.vertexAttribPointer(_normal, 3, GL.FLOAT, false, 0, 0);
-        GL.bindBuffer(GL.ELEMENT_ARRAY_BUFFER, KEPALA_FACES_BUFFER);
-        GL.drawElements(GL.TRIANGLES, kepala.indices.length, GL.UNSIGNED_SHORT, 0);
+  const perut = new Ellipsoid(GL, LIBS, SHADER_PROGRAM, locations, {
+    a: 0.85, b: 0.8, c: 0.4,
+    color: [210/255, 180/255, 140/255, 1],
+    shininess: 10,
+    z: 0.48, y: -0.1,
+    rx: LIBS.degToRad(5),
+    v_min: 0,       // ✅ Fix Z-Fighting
+    v_max: Math.PI
+  });
 
-        // --- Atur warna kuning/oranye untuk semua bagian pipi ---
-        GL.uniform4f(_u_color, 255/255, 223/255, 0/255, 1.0); // Warna kuning cerah
+  const kakiKanan = new Hyperboloid(GL, LIBS, SHADER_PROGRAM, locations, {
+    a: 0.25, c: 0.25, height: 1,
+    color: [85/255, 185/255, 235/255, 1],
+    shininess: 10,
+    x: 0.5, y: -1.5,
+    u_min: 0, u_max: 0.7
+  });
 
-        // =======================================================
-        // --- 2. GAMBAR BAGIAN PIPI KANAN (ALAS + CONE) ---
-        // =======================================================
+  const kakiKiri = new Hyperboloid(GL, LIBS, SHADER_PROGRAM, locations, {
+    a: 0.25, c: 0.25, height: 1,
+    color: [85/255, 185/255, 235/255, 1],
+    shininess: 10,
+    x: -0.5, y: -1.5,
+    u_min: 0, u_max: 0.7
+  });
 
-        // A. GAMBAR ALAS PIPI KANAN
-        var localMatrixAlasKanan = LIBS.get_I4();
-        LIBS.translateX(localMatrixAlasKanan, 0.95);
-        LIBS.rotateZ(localMatrixAlasKanan, LIBS.degToRad(-90)); // Miringkan agar pas di permukaan
-        
-        var MOVEMATRIX_ALAS_KANAN = LIBS.multiply(MOVEMATRIX_KEPALA, localMatrixAlasKanan);
-        GL.uniformMatrix4fv(_Mmatrix, false, MOVEMATRIX_ALAS_KANAN);
+  const jariKanan1 = new Ellipsoid(GL, LIBS, SHADER_PROGRAM, locations, {
+    a: 0.04, b: 0.04, c: 0.06,
+    color: [0, 0, 0, 1],
+    shininess: 1,
+    x: 0.08, y: 0.032, z: 0.2
+  });
 
-        var localNormalAlasKanan = LIBS.get_I4();
-        LIBS.rotateZ(localNormalAlasKanan, LIBS.degToRad(-15));
-        var NORMALMATRIX_ALAS_KANAN = LIBS.multiply(NORMALMATRIX_KEPALA, localNormalAlasKanan);
-        GL.uniformMatrix4fv(_Nmatrix, false, NORMALMATRIX_ALAS_KANAN);
-        
-        GL.uniform1f(_shininess, 5.0); // Alas tidak terlalu berkilau
+  const jariKanan2 = new Ellipsoid(GL, LIBS, SHADER_PROGRAM, locations, {
+    a: 0.04, b: 0.04, c: 0.06,
+    color: [0, 0, 0, 1],
+    shininess: 1,
+    x: -0.08, y: 0.032, z: 0.2
+  });
 
-        GL.bindBuffer(GL.ARRAY_BUFFER, ALAS_PIPI_VERTEX_BUFFER);
-        GL.vertexAttribPointer(_position, 3, GL.FLOAT, false, 0, 0);
-        GL.bindBuffer(GL.ARRAY_BUFFER, ALAS_PIPI_NORMAL_BUFFER);
-        GL.vertexAttribPointer(_normal, 3, GL.FLOAT, false, 0, 0);
-        GL.bindBuffer(GL.ELEMENT_ARRAY_BUFFER, ALAS_PIPI_FACES_BUFFER);
-        GL.drawElements(GL.TRIANGLES, alasPipi.indices.length, GL.UNSIGNED_SHORT, 0);
-        
-        // B. GAMBAR CONE PIPI KANAN
-        // var localMatrixPipiKanan = LIBS.get_I4();
-        // LIBS.translateX(localMatrixPipiKanan, 0.8);
-        // LIBS.rotateZ(localMatrixPipiKanan, LIBS.degToRad(-90));
-        
-        // var MOVEMATRIX_PIPI_KANAN = LIBS.multiply(MOVEMATRIX_KEPALA, localMatrixPipiKanan);
-        // GL.uniformMatrix4fv(_Mmatrix, false, MOVEMATRIX_PIPI_KANAN);
+  const jariKiri1 = new Ellipsoid(GL, LIBS, SHADER_PROGRAM, locations, {
+    a: 0.04, b: 0.04, c: 0.06,
+    color: [0, 0, 0, 1],
+    shininess: 1,
+    x: 0.08, y: 0.032, z: 0.2
+  });
 
-        // var localNormalPipiKanan = LIBS.get_I4();
-        // LIBS.rotateZ(localNormalPipiKanan, LIBS.degToRad(-90));
-        // var NORMALMATRIX_PIPI_KANAN = LIBS.multiply(NORMALMATRIX_KEPALA, localNormalPipiKanan);
-        // GL.uniformMatrix4fv(_Nmatrix, false, NORMALMATRIX_PIPI_KANAN);
-        
-        // GL.uniform1f(_shininess, 10.0);
+  const jariKiri2 = new Ellipsoid(GL, LIBS, SHADER_PROGRAM, locations, {
+    a: 0.04, b: 0.04, c: 0.06,
+    color: [0, 0, 0, 1],
+    shininess: 1,
+    x: -0.08, y: 0.032, z: 0.2
+  });
 
-        // GL.bindBuffer(GL.ARRAY_BUFFER, PIPI_VERTEX_BUFFER);
-        // GL.vertexAttribPointer(_position, 3, GL.FLOAT, false, 0, 0);
-        // GL.bindBuffer(GL.ARRAY_BUFFER, PIPI_NORMAL_BUFFER);
-        // GL.vertexAttribPointer(_normal, 3, GL.FLOAT, false, 0, 0);
-        // GL.bindBuffer(GL.ELEMENT_ARRAY_BUFFER, PIPI_FACES_BUFFER);
-        // GL.drawElements(GL.TRIANGLES, pipi.indices.length, GL.UNSIGNED_SHORT, 0);
+  const telapakKakiKanan = new Ellipsoid(GL, LIBS, SHADER_PROGRAM, locations, {
+    a: 0.25, b: 0.02, c: 0.25,
+    color: [85/255, 185/255, 235/255, 1],
+    shininess: 10,
+    y: 0
+  });
 
-        // =======================================================
-        // --- 3. GAMBAR BAGIAN PIPI KIRI (ALAS + CONE) ---
-        // =======================================================
+  const telapakKakiKiri = new Ellipsoid(GL, LIBS, SHADER_PROGRAM, locations, {
+    a: 0.25, b: 0.02, c: 0.25,
+    color: [85/255, 185/255, 235/255, 1],
+    shininess: 10,
+    y: 0
+  });
 
-        // A. GAMBAR ALAS PIPI KIRI
-        var localMatrixAlasKiri = LIBS.get_I4();
-        LIBS.translateX(localMatrixAlasKiri, -0.8);
-        LIBS.rotateZ(localMatrixAlasKiri, LIBS.degToRad(15));
-        
-        var MOVEMATRIX_ALAS_KIRI = LIBS.multiply(MOVEMATRIX_KEPALA, localMatrixAlasKiri);
-        GL.uniformMatrix4fv(_Mmatrix, false, MOVEMATRIX_ALAS_KIRI);
+  const controlPointsLengan = [
+    [0.2, 0.4, 0], [0.3, 0.5, 0], [0.4, -0.6, 0], [0.45, -1.4, 0]
+  ];
 
-        var localNormalAlasKiri = LIBS.get_I4();
-        LIBS.rotateZ(localNormalAlasKiri, LIBS.degToRad(15));
-        var NORMALMATRIX_ALAS_KIRI = LIBS.multiply(NORMALMATRIX_KEPALA, localNormalAlasKiri);
-        GL.uniformMatrix4fv(_Nmatrix, false, NORMALMATRIX_ALAS_KIRI);
-        
-        GL.uniform1f(_shininess, 5.0);
+  const lenganKanan = new Lathe(GL, LIBS, SHADER_PROGRAM, locations, {
+    controlPoints: controlPointsLengan,
+    color: [85/255, 185/255, 235/255, 1],
+    shininess: 10,
+    x: 1.08, y: 0.2,
+    rz: LIBS.degToRad(80),
+    ry: LIBS.degToRad(90),
+    rx: LIBS.degToRad(50),
+    scaleX: 1, scaleZ: 0.4
+  });
 
-        GL.bindBuffer(GL.ARRAY_BUFFER, ALAS_PIPI_VERTEX_BUFFER);
-        GL.vertexAttribPointer(_position, 3, GL.FLOAT, false, 0, 0);
-        GL.bindBuffer(GL.ARRAY_BUFFER, ALAS_PIPI_NORMAL_BUFFER);
-        GL.vertexAttribPointer(_normal, 3, GL.FLOAT, false, 0, 0);
-        GL.bindBuffer(GL.ELEMENT_ARRAY_BUFFER, ALAS_PIPI_FACES_BUFFER);
-        GL.drawElements(GL.TRIANGLES, alasPipi.indices.length, GL.UNSIGNED_SHORT, 0);
+  const lenganKiri = new Lathe(GL, LIBS, SHADER_PROGRAM, locations, {
+    controlPoints: controlPointsLengan,
+    color: [85/255, 185/255, 235/255, 1],
+    shininess: 10,
+    x: -1.08, y: 0.2,
+    rz: LIBS.degToRad(-80),
+    ry: LIBS.degToRad(-90),
+    rx: LIBS.degToRad(50),
+    scaleX: 1, scaleZ: 0.4
+  });
 
-        // B. GAMBAR CONE PIPI KIRI
-        // var localMatrixPipiKiri = LIBS.get_I4();
-        // LIBS.translateX(localMatrixPipiKiri, -0.8);
-        // LIBS.rotateZ(localMatrixPipiKiri, LIBS.degToRad(90));
-        
-        // var MOVEMATRIX_PIPI_KIRI = LIBS.multiply(MOVEMATRIX_KEPALA, localMatrixPipiKiri);
-        // GL.uniformMatrix4fv(_Mmatrix, false, MOVEMATRIX_PIPI_KIRI);
-        
-        // var localNormalPipiKiri = LIBS.get_I4();
-        // LIBS.rotateZ(localNormalPipiKiri, LIBS.degToRad(90));
-        // var NORMALMATRIX_PIPI_KIRI = LIBS.multiply(NORMALMATRIX_KEPALA, localNormalPipiKiri);
-        // GL.uniformMatrix4fv(_Nmatrix, false, NORMALMATRIX_PIPI_KIRI);
-        
-        // GL.uniform1f(_shininess, 10.0);
-        
-        // GL.bindBuffer(GL.ARRAY_BUFFER, PIPI_VERTEX_BUFFER);
-        // GL.vertexAttribPointer(_position, 3, GL.FLOAT, false, 0, 0);
-        // GL.bindBuffer(GL.ARRAY_BUFFER, PIPI_NORMAL_BUFFER);
-        // GL.vertexAttribPointer(_normal, 3, GL.FLOAT, false, 0, 0);
-        // GL.bindBuffer(GL.ELEMENT_ARRAY_BUFFER, PIPI_FACES_BUFFER);
-        // GL.drawElements(GL.TRIANGLES, pipi.indices.length, GL.UNSIGNED_SHORT, 0);
+  const telapakTanganKanan = new Ellipsoid(GL, LIBS, SHADER_PROGRAM, locations, {
+    a: 0.45, b: 0.04, c: 0.18,
+    color: [85/255, 185/255, 235/255, 1],
+    shininess: 10,
+    y: -1.4
+  });
 
-        GL.flush();
-        window.requestAnimationFrame(animate);
-    };
-    animate(0);
-};
+  const telapakTanganKiri = new Ellipsoid(GL, LIBS, SHADER_PROGRAM, locations, {
+    a: 0.45, b: 0.04, c: 0.18,
+    color: [85/255, 185/255, 235/255, 1],
+    shininess: 10,
+    y: -1.4
+  });
+
+  const jariTanganKanan1 = new Ellipsoid(GL, LIBS, SHADER_PROGRAM, locations, {
+    a: 0.2, b: 0.3, c: 0.12,
+    color: [85/255, 185/255, 235/255, 1],
+    shininess: 5,
+    x: -0.26, y: -0.1
+  });
+
+  const jariTanganKanan2 = new Ellipsoid(GL, LIBS, SHADER_PROGRAM, locations, {
+    a: 0.22, b: 0.3, c: 0.18,
+    color: [85/255, 185/255, 235/255, 1],
+    shininess: 5,
+    x: -0.02, y: -0.1
+  });
+
+  const jariTanganKanan3 = new Ellipsoid(GL, LIBS, SHADER_PROGRAM, locations, {
+    a: 0.2, b: 0.3, c: 0.12,
+    color: [85/255, 185/255, 235/255, 1],
+    shininess: 5,
+    x: 0.26, y: -0.1
+  });
+
+  const jariTanganKiri1 = new Ellipsoid(GL, LIBS, SHADER_PROGRAM, locations, {
+    a: 0.2, b: 0.3, c: 0.12,
+    color: [85/255, 185/255, 235/255, 1],
+    shininess: 5,
+    x: -0.26, y: -0.1
+  });
+
+  const jariTanganKiri2 = new Ellipsoid(GL, LIBS, SHADER_PROGRAM, locations, {
+    a: 0.22, b: 0.3, c: 0.18,
+    color: [85/255, 185/255, 235/255, 1],
+    shininess: 5,
+    x: -0.02, y: -0.1
+  });
+
+  const jariTanganKiri3 = new Ellipsoid(GL, LIBS, SHADER_PROGRAM, locations, {
+    a: 0.2, b: 0.3, c: 0.12,
+    color: [85/255, 185/255, 235/255, 1],
+    shininess: 5,
+    x: 0.26, y: -0.1
+  });
+
+  const sirip = new Ellipsoid(GL, LIBS, SHADER_PROGRAM, locations, {
+    a: 0.08, b: 1, c: 1.1,
+    color: [60/255, 68/255, 82/255, 1],
+    shininess: 8,
+    u_min: 0, u_max: Math.PI,
+    v_min: 0, v_max: Math.PI,
+    x: 0, y: 0.45, z: 0.1,
+    rx: LIBS.degToRad(-75)
+  });
+
+  const alasSirip = new Ellipsoid(GL, LIBS, SHADER_PROGRAM, locations, {
+    a: 0.08, b: 0.01, c: 1.1,
+    color: [60/255, 68/255, 82/255, 1],
+    shininess: 8
+  });
+
+  const cpLeaf = [
+    [0.1, 0.1, 0], [0.52, 0.1, 0], [0.32, 0.60, 0],
+    [0.28, 0.90, 0], [0.22, 1.12, 0], [0.12, 1.32, 0], [0.02, 1.36, 0]
+  ];
+
+  const wingR = new Lathe(GL, LIBS, SHADER_PROGRAM, locations, {
+    controlPoints: cpLeaf,
+    color: [60/255, 68/255, 82/255, 1],
+    shininess: 8,
+    x: 0.45, y: -0.70, z: -1.15,
+    ry: LIBS.degToRad(90),
+    rx: LIBS.degToRad(10),
+    rz: LIBS.degToRad(-10),
+    scaleX: 1.5, scaleZ: 0.15
+  });
+
+  const wingL = new Lathe(GL, LIBS, SHADER_PROGRAM, locations, {
+    controlPoints: cpLeaf,
+    color: [60/255, 68/255, 82/255, 1],
+    shininess: 8,
+    x: -0.45, y: -0.70, z: -1.15,
+    rx: LIBS.degToRad(10),
+    ry: LIBS.degToRad(-90),
+    rz: LIBS.degToRad(10),
+    scaleX: 1.5, scaleZ: 0.15
+  });
+
+  // ❌ Shield object Dihapus
+
+  // Build scene graph
+  badan.childs.push(wingR, wingL);
+  mataKanan.childs.push(pupilKanan, kilauMataKanan);
+  mataKiri.childs.push(pupilKiri, kilauMataKiri);
+  sirip.childs.push(alasSirip);
+  kepalaAtas.childs.push(
+    daguBawah, lingkaranPipiKanan, pipiKanan,
+    lingkaranPipiKiri, pipiKiri, mataKanan, mataKiri,
+    hidungKanan, hidungKiri, senyum, sirip
+  );
+  telapakKakiKanan.childs.push(jariKanan1, jariKanan2);
+  telapakKakiKiri.childs.push(jariKiri1, jariKiri2);
+  kakiKanan.childs.push(telapakKakiKanan);
+  kakiKiri.childs.push(telapakKakiKiri);
+  telapakTanganKanan.childs.push(jariTanganKanan1, jariTanganKanan2, jariTanganKanan3);
+  telapakTanganKiri.childs.push(jariTanganKiri1, jariTanganKiri2, jariTanganKiri3);
+  lenganKanan.childs.push(telapakTanganKanan);
+  lenganKiri.childs.push(telapakTanganKiri);
+  badan.childs.push(kepalaAtas, perut, kakiKanan, kakiKiri, lenganKanan, lenganKiri);
+
+  // ❌ shield.setup() Dihapus
+  badan.setup();
+
+  // ================= ORBITAL CAMERA =================
+  const PROJMATRIX = LIBS.get_projection(40, CANVAS.width / CANVAS.height, 0.5, 100);
+  const VIEWMATRIX = LIBS.get_I4();
+
+  let camDistance = 10.0;
+  let camTheta = 0;
+  let camPhi = Math.PI / 3;
+  const camRotSpeed = 0.008;
+  const camZoomSpeed = 0.8;
+
+  function getCameraPosition() {
+    const x = camDistance * Math.sin(camPhi) * Math.sin(camTheta);
+    const y = camDistance * Math.cos(camPhi);
+    const z = camDistance * Math.sin(camPhi) * Math.cos(camTheta);
+    return [x, y, z];
+  }
+
+  function buildView() {
+    const camPos = getCameraPosition();
+    const target = [position[0], 0, position[2]];
+    LIBS.set_I4(VIEWMATRIX);
+    LIBS.lookAt(VIEWMATRIX, camPos, target, [0, 1, 0]);
+    GL.uniform3fv(locations._cameraPosition, camPos);
+  }
+
+  let dragging = false, x_prev = 0, y_prev = 0;
+
+  CANVAS.addEventListener("mousedown", e => {
+    dragging = true;
+    x_prev = e.pageX;
+    y_prev = e.pageY;
+    e.preventDefault();
+  });
+
+  ["mouseup", "mouseout"].forEach(ev =>
+    CANVAS.addEventListener(ev, () => { dragging = false; }, false)
+  );
+
+  CANVAS.addEventListener("mousemove", e => {
+    if (!dragging) return;
+    const dX = (e.pageX - x_prev);
+    const dY = (e.pageY - y_prev);
+
+    camTheta -= dX * camRotSpeed;
+    camPhi = Math.max(0.1, Math.min(Math.PI - 0.1, camPhi + dY * camRotSpeed));
+
+    x_prev = e.pageX;
+    y_prev = e.pageY;
+    e.preventDefault();
+  }, false);
+
+  CANVAS.addEventListener('wheel', e => {
+    camDistance = Math.max(5, Math.min(25, camDistance + Math.sign(e.deltaY) * camZoomSpeed));
+    e.preventDefault();
+  }, { passive: false });
+
+  const ROOT = LIBS.get_I4();
+
+  function buildRoot() {
+    LIBS.set_I4(ROOT);
+  }
+
+  // ================= State & Animation =================
+  let bodyRotY = 0, bodyRotX = 0;
+  let position = [0, 0, -20];
+  let badanBaseY = 0;
+
+  // ✅ State disederhanakan
+  const STATE = {
+    RUNNING: 0,
+    JUMP_BACK: 1,
+    IDLE: 2
+  };
+  let state = STATE.RUNNING;
+  const RunSpeed = 3.0;
+  const JumpDur = 0.7, JumpBackDist = 5.0, JumpHeight = 1.8;
+  let jumpCount = 0, totalJumps = 2, jumpT = 0;
+  let runTimer = 0, runDur = 1.6;
+
+  let idleTimer = 0;
+  const idleLoopDur = 3.0; // ✅ Durasi idle sebelum lari lagi
+
+  // ❌ Variabel shield dihapus
+
+  function poseRunning(t) {
+    const smallSwing = Math.sin(t * 2) * LIBS.degToRad(20);
+
+    LIBS.set_I4(lenganKanan.MOVE_MATRIX);
+    LIBS.rotateX(lenganKanan.MOVE_MATRIX, LIBS.degToRad(-100));
+    LIBS.rotateY(lenganKanan.MOVE_MATRIX, LIBS.degToRad(20));
+    LIBS.rotateZ(lenganKanan.MOVE_MATRIX, smallSwing);
+
+    LIBS.set_I4(lenganKiri.MOVE_MATRIX);
+    LIBS.rotateX(lenganKiri.MOVE_MATRIX, LIBS.degToRad(-100));
+    LIBS.rotateY(lenganKiri.MOVE_MATRIX, LIBS.degToRad(-20));
+    LIBS.rotateZ(lenganKiri.MOVE_MATRIX, -smallSwing);
+
+    const swing = 20, amp = 5;
+    LIBS.set_I4(kakiKanan.MOVE_MATRIX);
+    LIBS.rotateX(kakiKanan.MOVE_MATRIX, Math.sin(t * swing + Math.PI) * LIBS.degToRad(amp));
+
+    LIBS.set_I4(kakiKiri.MOVE_MATRIX);
+    LIBS.rotateX(kakiKiri.MOVE_MATRIX, Math.sin(t * swing) * LIBS.degToRad(amp));
+  }
+
+  function poseIdle(t) {
+    const breathSpeed = 1.2, breathAmp = 0.03;
+    const breathOffset = Math.sin(t * breathSpeed) * breathAmp;
+    position[1] = badanBaseY + breathOffset;
+
+    const armSwaySpeed = 1.5, armSwayAmp = 8;
+    const armSwing = Math.sin(t * armSwaySpeed) * LIBS.degToRad(armSwayAmp);
+
+    LIBS.set_I4(lenganKanan.MOVE_MATRIX);
+    LIBS.rotateX(lenganKanan.MOVE_MATRIX, LIBS.degToRad(-20) + armSwing);
+
+    LIBS.set_I4(lenganKiri.MOVE_MATRIX);
+    LIBS.rotateX(lenganKiri.MOVE_MATRIX, LIBS.degToRad(-20) - armSwing);
+
+    const headBobSpeed = 1.0, headBobAmp = 5;
+    const headBob = Math.sin(t * headBobSpeed) * LIBS.degToRad(headBobAmp);
+
+    LIBS.set_I4(kepalaAtas.MOVE_MATRIX);
+    LIBS.rotateX(kepalaAtas.MOVE_MATRIX, headBob);
+
+    LIBS.set_I4(kakiKanan.MOVE_MATRIX);
+    LIBS.set_I4(kakiKiri.MOVE_MATRIX);
+  }
+
+  function poseJump(tNorm) {
+    LIBS.set_I4(kakiKanan.MOVE_MATRIX);
+    LIBS.set_I4(kakiKiri.MOVE_MATRIX);
+
+    const zW = Math.sin(tNorm * Math.PI * 2) * LIBS.degToRad(10);
+    const xL = LIBS.degToRad(-30);
+
+    LIBS.set_I4(lenganKanan.MOVE_MATRIX);
+    LIBS.rotateX(lenganKanan.MOVE_MATRIX, xL);
+    LIBS.rotateZ(lenganKanan.MOVE_MATRIX, zW);
+
+    LIBS.set_I4(lenganKiri.MOVE_MATRIX);
+    LIBS.rotateX(lenganKiri.MOVE_MATRIX, xL);
+    LIBS.rotateZ(lenganKiri.MOVE_MATRIX, -zW);
+  }
+
+  // ❌ Fungsi pose shield dihapus
+
+  let lastTime = performance.now() / 1000;
+
+  function animate() {
+    const now = performance.now() / 1000;
+    const dt = Math.min(0.033, now - lastTime);
+    lastTime = now;
+
+    if (state === STATE.RUNNING) {
+      runTimer += dt;
+      const fwd = [Math.sin(bodyRotY), 0, Math.cos(bodyRotY)];
+      position[0] += fwd[0] * RunSpeed * dt;
+      position[2] += fwd[2] * RunSpeed * dt;
+      position[1] = badanBaseY;
+      if (runTimer >= runDur) {
+        runTimer = 0;
+        state = STATE.JUMP_BACK;
+        jumpT = 0;
+      }
+    }
+    else if (state === STATE.JUMP_BACK) {
+      jumpT = Math.min(1, jumpT + dt / JumpDur);
+      const fwd = [Math.sin(bodyRotY), 0, Math.cos(bodyRotY)];
+      const back = [-fwd[0], 0, -fwd[2]];
+      position[0] += back[0] * (JumpBackDist * dt / JumpDur);
+      position[2] += back[2] * (JumpBackDist * dt / JumpDur);
+      position[1] = badanBaseY + 4 * JumpHeight * jumpT * (1 - jumpT);
+      if (jumpT >= 1) {
+        position[1] = badanBaseY;
+        jumpCount += 1;
+        if (jumpCount < totalJumps) {
+          state = STATE.RUNNING;
+          runTimer = 0;
+        } else {
+          state = STATE.IDLE;
+          idleTimer = 0;
+        }
+      }
+    }
+    else if (state === STATE.IDLE) {
+      idleTimer += dt;
+      // ✅ Logika diganti: kembali lari setelah idle
+      if (idleTimer >= idleLoopDur) { 
+        state = STATE.RUNNING;
+        runTimer = 0;
+        jumpCount = 0;
+        idleTimer = 0;
+      }
+    }
+    // ❌ State shield dihapus
+
+    if (state === STATE.RUNNING) {
+      poseRunning(now);
+    } else if (state === STATE.JUMP_BACK) {
+      poseJump(jumpT);
+    } else if (state === STATE.IDLE) {
+      poseIdle(now);
+    }
+    // ❌ Pose shield dihapus
+
+    LIBS.set_I4(badan.MOVE_MATRIX);
+    if (LIBS.translate) {
+      LIBS.translate(badan.MOVE_MATRIX, position[0], position[1], position[2]);
+    } else {
+      LIBS.translateX(badan.MOVE_MATRIX, position[0]);
+      LIBS.translateY(badan.MOVE_MATRIX, position[1]);
+      LIBS.translateZ(badan.MOVE_MATRIX, position[2]);
+    }
+    LIBS.rotateY(badan.MOVE_MATRIX, bodyRotY);
+    LIBS.rotateX(badan.MOVE_MATRIX, bodyRotX);
+
+    // ❌ Matriks shield dihapus
+  
+    buildRoot();
+    buildView();
+
+    // ✅ 5) Render (Versi Sederhana untuk Solid Objects)
+    GL.viewport(0,0,CANVAS.width,CANVAS.height);
+    GL.clear(GL.COLOR_BUFFER_BIT | GL.DEPTH_BUFFER_BIT);
+
+    GL.uniformMatrix4fv(locations._Pmatrix,false,PROJMATRIX);
+    GL.uniformMatrix4fv(locations._Vmatrix,false,VIEWMATRIX);
+    GL.uniform3fv(locations._lightPosition,[5,5,8]);
+
+    // Langsung render badan. State GL sudah diatur di awal.
+    badan.render(LIBS.get_I4(), LIBS.get_I4());
+    
+    // ❌ Logika Tahap 1, Tahap 2, dan Cleanup Dihapus
+
+    GL.flush();
+    requestAnimationFrame(animate);
+  }
+
+  animate();
+}
+
 window.addEventListener('load', main);

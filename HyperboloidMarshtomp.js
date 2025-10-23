@@ -1,5 +1,5 @@
-// Lathe.js
-export class Lathe {
+// Hyperboloid.js
+export class Hyperboloid {
     GL = null;
     SHADER_PROGRAM = null;
     _position = null;
@@ -35,14 +35,16 @@ export class Lathe {
         this.POSITION_MATRIX = this.LIBS.get_I4();
         this.MOVE_MATRIX = this.LIBS.get_I4();
 
-        const controlPoints = opts.controlPoints ?? [[0.5, 1, 0], [0.5, 0, 0]];
-        const segments = opts.segments ?? 20;
-        const profileSegments = opts.profileSegments ?? 20;
+        const a = opts.a ?? 0.2;
+        const c = opts.c ?? 0.2;
+        const height = opts.height ?? 1.0;
+        const stacks = opts.stacks ?? 30;
+        const sectors = opts.sectors ?? 30;
         this.color = opts.color ?? [0.5, 0.5, 0.5, 1.0];
         this.shininess = opts.shininess ?? 10.0;
-
-        const scaleX = opts.scaleX ?? 1.0;
-        const scaleZ = opts.scaleZ ?? 1.0;
+        
+        const u_min = opts.u_min ?? -1.0;
+        const u_max = opts.u_max ?? 1.0;
 
         this.LIBS.translateX(this.POSITION_MATRIX, opts.x ?? 0);
         this.LIBS.translateY(this.POSITION_MATRIX, opts.y ?? 0);
@@ -51,53 +53,37 @@ export class Lathe {
         this.LIBS.rotateY(this.POSITION_MATRIX, opts.ry ?? 0);
         this.LIBS.rotateZ(this.POSITION_MATRIX, opts.rz ?? 0);
 
-        this._buildGeometry(controlPoints, segments, profileSegments, scaleX, scaleZ);
-    }
-    
-    _getBezierPoint(t, p0, p1, p2, p3) {
-        const u = 1 - t;
-        const tt = t * t;
-        const uu = u * u;
-        const uuu = uu * u;
-        const ttt = tt * t;
-
-        const p = [
-            uuu * p0[0] + 3 * uu * t * p1[0] + 3 * u * tt * p2[0] + ttt * p3[0],
-            uuu * p0[1] + 3 * uu * t * p1[1] + 3 * u * tt * p2[1] + ttt * p3[1],
-            0
-        ];
-        return p;
+        this._buildGeometry(a, c, height, stacks, sectors, u_min, u_max);
     }
 
-    _buildGeometry(controlPoints, segments, profileSegments, scaleX, scaleZ) {
-        const profilePoints = [];
-        for (let i = 0; i < controlPoints.length - 3; i += 3) {
-            for (let j = 0; j <= profileSegments; j++) {
-                const t = j / profileSegments;
-                profilePoints.push(this._getBezierPoint(t, controlPoints[i], controlPoints[i+1], controlPoints[i+2], controlPoints[i+3]));
-            }
-        }
-        
-        for (let i = 0; i < profilePoints.length; i++) {
-            for (let j = 0; j <= segments; j++) {
-                const angle = (j / segments) * 2 * Math.PI;
-                const point = profilePoints[i];
-                
-                const x = point[0] * scaleX * Math.cos(angle);
-                const y = point[1];
-                const z = point[0] * scaleZ * Math.sin(angle);
+    _buildGeometry(a, c, height, stacks, sectors, u_min, u_max) {
+        for (let i = 0; i <= stacks; i++) {
+            const u_ratio = i / stacks;
+            const u = u_min + u_ratio * (u_max - u_min);
+
+            for (let j = 0; j <= sectors; j++) {
+                const v_ratio = j / sectors;
+                const v = -Math.PI + v_ratio * (Math.PI * 2);
+
+                // Persamaan parametrik untuk Hyperboloid
+                const x = a * Math.cosh(u) * Math.cos(v);
+                const y = height * Math.sinh(u); // Sumbu Y sebagai tinggi
+                const z = c * Math.cosh(u) * Math.sin(v);
                 this.vertices.push(x, y, z);
-                
-                const normal = [x / (scaleX * scaleX), 0, z / (scaleZ * scaleZ)];
-                const len = Math.sqrt(normal[0]*normal[0] + normal[1]*normal[1] + normal[2]*normal[2]);
-                this.normals.push(normal[0]/len, normal[1]/len, normal[2]/len);
+
+                // Normal untuk hyperboloid
+                const nx = (2 * x) / (a * a);
+                const ny = (-2 * y) / (height * height);
+                const nz = (2 * z) / (c * c);
+                const len = Math.sqrt(nx*nx + ny*ny + nz*nz);
+                this.normals.push(nx/len, ny/len, nz/len);
             }
         }
-        
-        for (let i = 0; i < profilePoints.length - 1; i++) {
-            for (let j = 0; j < segments; j++) {
-                const first = i * (segments + 1) + j;
-                const second = first + segments + 1;
+
+        for (let i = 0; i < stacks; i++) {
+            for (let j = 0; j < sectors; j++) {
+                const first = i * (sectors + 1) + j;
+                const second = first + sectors + 1;
                 this.indices.push(first, second, first + 1);
                 this.indices.push(second, second + 1, first + 1);
             }
@@ -120,12 +106,12 @@ export class Lathe {
         this.childs.forEach(child => child.setup());
     }
 
-    render(PARENT_MATRIX, PARENT_NORMAL_MATRIX) {
+    render(PARENT_MATRIX, PARENT_NORMAL_MATRIX) { 
         const MODEL_MATRIX = this.LIBS.get_I4();
         this.LIBS.mul(MODEL_MATRIX, PARENT_MATRIX, this.POSITION_MATRIX);
         this.LIBS.mul(MODEL_MATRIX, MODEL_MATRIX, this.MOVE_MATRIX);
 
-        const NORMAL_MATRIX = this.LIBS.get_I4();
+        const NORMAL_MATRIX = this.LIBS.getNormalMatrix(MODEL_MATRIX);
         this.LIBS.mul(NORMAL_MATRIX, PARENT_NORMAL_MATRIX, this.POSITION_MATRIX);
         this.LIBS.mul(NORMAL_MATRIX, NORMAL_MATRIX, this.MOVE_MATRIX);
         

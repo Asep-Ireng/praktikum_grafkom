@@ -116,7 +116,7 @@ export class Cylinder {
         this.LIBS.mul(MODEL_MATRIX, PARENT_MATRIX, this.POSITION_MATRIX);
         this.LIBS.mul(MODEL_MATRIX, MODEL_MATRIX, this.MOVE_MATRIX);
         
-        const NORMAL_MATRIX = this.LIBS.get_I4();
+        const NORMAL_MATRIX = this.LIBS.getNormalMatrix(MODEL_MATRIX);
         this.LIBS.mul(NORMAL_MATRIX, PARENT_NORMAL_MATRIX, this.POSITION_MATRIX);
         this.LIBS.mul(NORMAL_MATRIX, NORMAL_MATRIX, this.MOVE_MATRIX);
 
