@@ -23,6 +23,11 @@ export class Rock {
   // Seeded random number generator
   _seed = 12345;
 
+  _randomRadius(minR, maxR) {
+  const u = this._seededRandom();                 // 0..1
+  return Math.sqrt(minR*minR + u*(maxR*maxR - minR*minR));
+}
+
   constructor(GL, SHADER_PROGRAM, _position, _color, _normal, _Mmatrix, opts = {}) {
     this.GL = GL;
     this.SHADER_PROGRAM = SHADER_PROGRAM;
@@ -33,7 +38,7 @@ export class Rock {
 
     // Configuration
     this.groundRadius = opts.groundRadius ?? 35;
-    this.numClusters = opts.numClusters ?? 3;
+    this.numClusters = opts.numClusters ?? 6;
     this.numScattered = opts.numScattered ?? 5;
 
     // Puddle locations for collision avoidance
@@ -83,7 +88,7 @@ export class Rock {
   _getRandomPosition(minRadius, maxRadius, maxAttempts = 20) {
     for (let attempt = 0; attempt < maxAttempts; attempt++) {
       const angle = this._seededRandom() * Math.PI * 2;
-      const radius = this._random(minRadius, maxRadius);
+      const radius = this._randomRadius(minRadius, maxRadius);
       const x = Math.cos(angle) * radius;
       const z = Math.sin(angle) * radius;
 
@@ -113,38 +118,59 @@ export class Rock {
     ];
   }
 
+  _scatterUniform(count, minR, maxR) {
+  const pts = [];
+  const sector = (Math.PI * 2) / count;
+
+  for (let i = 0; i < count; i++) {
+    // sudut dasar per sektor + jitter kecil
+    const angle = i * sector + this._random(-sector * 0.3, sector * 0.3);
+    const r = this._randomRadius(minR, maxR);
+    const x = Math.cos(angle) * r;
+    const z = Math.sin(angle) * r;
+
+    if (this._isValidPosition(x, z)) pts.push({ x, z });
+  }
+  return pts;
+}
+
   // Generate all rocks (clusters + scattered)
   _generateAllRocks() {
-    // Generate rock clusters (background/mid-ground)
-    for (let i = 0; i < this.numClusters; i++) {
-      const clusterPos = this._getRandomPosition(15, 25);
-      const numRocksInCluster = Math.floor(this._random(2, 5)); // 2-4 rocks per cluster
-
-      this._generateCluster(clusterPos.x, clusterPos.z, numRocksInCluster);
-    }
-
-    // Generate scattered individual rocks (foreground)
-    for (let i = 0; i < this.numScattered; i++) {
-      const pos = this._getRandomPosition(5, 20);
-      const type = this._seededRandom() > 0.5 ? 'smooth' : 'angular';
-      const size = this._random(0.4, 1.2);
-
-      this.rocks.push({
-        type: type,
-        x: pos.x,
-        y: 0,
-        z: pos.z,
-        size: size,
-        rotX: this._random(0, Math.PI * 2),
-        rotY: this._random(0, Math.PI * 2),
-        rotZ: this._random(0, Math.PI * 2),
-        color: this._getRandomColor(),
-        scaleX: this._random(0.8, 1.2),
-        scaleY: this._random(0.7, 0.9), // Slightly squashed
-        scaleZ: this._random(0.8, 1.2)
-      });
-    }
+  // ======== 1️⃣ Generate clustered rocks (tumpukan) ========
+  for (let i = 0; i < this.numClusters; i++) {
+    // Lokasi cluster agak di tengah–pinggir
+    const clusterPos = this._getRandomPosition(10, this.groundRadius * 0.8);
+    const numRocksInCluster = Math.floor(this._random(3, 6)); // 3–5 batu per cluster
+    this._generateCluster(clusterPos.x, clusterPos.z, numRocksInCluster);
   }
+
+  // ======== 2️⃣ Generate uniformly scattered rocks ========
+  const uniformPts = this._scatterUniform(
+    Math.max(24, this.numScattered), // banyak titik melingkar
+    4,                               // radius minimum
+    this.groundRadius * 0.95         // hampir ke tepi
+  );
+
+  for (const pos of uniformPts) {
+    const type = this._seededRandom() > 0.5 ? "smooth" : "angular";
+    const size = this._random(0.35, 1.4);
+
+    this.rocks.push({
+      type,
+      x: pos.x,
+      y: 0,
+      z: pos.z,
+      size,
+      rotX: this._random(0, Math.PI * 2),
+      rotY: this._random(0, Math.PI * 2),
+      rotZ: this._random(0, Math.PI * 2),
+      color: this._getRandomColor(),
+      scaleX: this._random(0.8, 1.2),
+      scaleY: this._random(0.7, 0.9),
+      scaleZ: this._random(0.8, 1.2),
+    });
+  }
+}
 
   // Generate a cluster of stacked rocks
   _generateCluster(baseX, baseZ, numRocks) {

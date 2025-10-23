@@ -1,6 +1,6 @@
 // main-fps.js - FPS Camera Version
-import { createMudkipParts } from './mudkip-part.js';
-import { setupMudkipAnimation } from './mudkip-animasi.js';
+import { createMudkipParts } from './mudkip/mudkip-part.js';
+import { setupMudkipAnimation } from './mudkip/mudkip-animasi.js';
 import { Sky } from './environment/Sky.js';
 import { Ground, createPuddles } from './environment/ground.js';
 import { Water } from './environment/water.js';
@@ -174,7 +174,6 @@ function main() {
 
     // Set Mudkip position in world (static)
     LIBSMudkip.set_I4(mudkip.MudkipRig.POSITION_MATRIX);
-    // Mudkip di origin (0, 0, 0) - adjust kalau perlu
     LIBSMudkip.translateX(mudkip.MudkipRig.POSITION_MATRIX, 0);
     LIBSMudkip.translateY(mudkip.MudkipRig.POSITION_MATRIX, 0);  // Raise Mudkip above ground
     LIBSMudkip.translateZ(mudkip.MudkipRig.POSITION_MATRIX, 0);
@@ -224,26 +223,8 @@ function main() {
         minDistBetweenPuddles: 3.0
     });
 
-    // PRESET 4: Default (seimbang, 10 puddles)
-    const defaultPuddles = createPuddles(10, 35, 12345, {
-        minRadius: 0.8,
-        maxRadius: 2.5,
-        minDistFromCenter: 3,
-        minDistBetweenPuddles: 2.0
-    });
-
-    // MANUAL: Full control (tulis satu-satu)
-    const manualPuddles = [
-        { x: -5, z: 3, radius: 1.8 },
-        { x: 6, z: -4, radius: 2.0 },
-        { x: 0, z: 7, radius: 1.5 },
-        { x: -8, z: -6, radius: 1.2 },
-        { x: 3, z: -2, radius: 1.0 },
-        { x: -2, z: 8, radius: 1.6 }
-    ];
-
     // ========== PILIH PUDDLES YANG MAU DIPAKAI ==========
-    const puddlesToUse = manySmallPuddles; // Ganti sesuai keinginan
+    const puddlesToUse = veryManyPuddles; // Ganti sesuai keinginan
 
     const ground = new Ground(GL, SHADER_PROGRAM, _position, _color, _normal, _Mmatrix, {
         radius: 35,
@@ -254,11 +235,12 @@ function main() {
     });
     ground.setup();
 
-    const rocks = new Rock(GL, SHADER_PROGRAM, _position, _color, _normal, _Mmatrix, {
+    const rocks = new Rock(GL, SHADER_PROGRAM, _position, _color, _normal, _Mmatrix, { 
         groundRadius: 35,
-        numClusters: 3,
-        numScattered: 5,
-        puddles: puddlesToUse  // Use same puddles for rock avoidance
+        numClusters: 6,        // jumlah gundukan batu
+        numScattered: 20,      // titik penyebar melingkar
+        puddles: puddlesToUse,
+        seed: 98765
     });
     rocks.setup();
 
@@ -268,7 +250,7 @@ function main() {
     let cameraPosition = [0, 3, 15];      // Start position (higher Y, looking at Mudkip)
     let cameraFront = [0, 0, -1];         // Looking direction (forward = -Z)
     let cameraUp = [0, 1, 0];             // Up vector (Y-up)
-    let cameraSpeed = 0.15;               // Movement speed
+    let cameraSpeed = 0.2;               // Movement speed
 
     // Mouse look variables
     let yaw = -90.0;       // Horizontal rotation (degrees)
