@@ -420,7 +420,11 @@ function main() {
         anim.applyAnimation();
 
         // Render skybox (background)
-        sky.render(PROJMATRIX, viewMatrix, LIBSMudkip.get_I4());
+        let skyModelMatrix = LIBSMudkip.get_I4();
+        let rotationSpeed = 0.00002; // kecepatan rotasi
+        LIBSMudkip.rotateY(skyModelMatrix, time * rotationSpeed);
+        sky.render(PROJMATRIX, viewMatrix, skyModelMatrix);
+
         ground.render(LIBSMudkip.get_I4());
         rocks.render(LIBSMudkip.get_I4());
 
