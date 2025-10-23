@@ -13,8 +13,8 @@ export class ellipsoid {
   vertex = [];
   faces = [];
 
-  POSITION_MATRIX = LIBS.get_I4();
-  MOVE_MATRIX     = LIBS.get_I4();
+  POSITION_MATRIX = LIBSMudkip.get_I4();
+  MOVE_MATRIX     = LIBSMudkip.get_I4();
 
   childs = [];
 
@@ -111,12 +111,12 @@ export class ellipsoid {
   }
 
   updateBoneMatrix() {
-    let m = LIBS.get_I4();
-    LIBS.translateLocal(m, this.bone.position[0], this.bone.position[1], this.bone.position[2]);
-    LIBS.rotateX(m, this.bone.rotation[0]);
-    LIBS.rotateY(m, this.bone.rotation[1]);
-    LIBS.rotateZ(m, this.bone.rotation[2]);
-    LIBS.scale(m, this.bone.scale[0], this.bone.scale[1], this.bone.scale[2]);
+    let m = LIBSMudkip.get_I4();
+    LIBSMudkip.translateLocal(m, this.bone.position[0], this.bone.position[1], this.bone.position[2]);
+    LIBSMudkip.rotateX(m, this.bone.rotation[0]);
+    LIBSMudkip.rotateY(m, this.bone.rotation[1]);
+    LIBSMudkip.rotateZ(m, this.bone.rotation[2]);
+    LIBSMudkip.scale(m, this.bone.scale[0], this.bone.scale[1], this.bone.scale[2]);
 
     this.POSITION_MATRIX = m;
   }
@@ -134,9 +134,9 @@ export class ellipsoid {
   }
 
   render(PARENT_MATRIX) {
-    const M = LIBS.get_I4();
-    LIBS.mul(M, PARENT_MATRIX, this.POSITION_MATRIX);
-    LIBS.mul(M, M, this.MOVE_MATRIX);
+    const M = LIBSMudkip.get_I4();
+    LIBSMudkip.mul(M, PARENT_MATRIX, this.POSITION_MATRIX);
+    LIBSMudkip.mul(M, M, this.MOVE_MATRIX);
     this.MODEL_MATRIX = M;
 
     this.GL.useProgram(this.SHADER_PROGRAM);

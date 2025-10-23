@@ -5,9 +5,9 @@ export class BellyPatch {
   _position=null; _color=null; _normal=null; _MMatrix=null;
   OBJECT_VERTEX=null; OBJECT_FACES=null;
   vertex=[]; faces=[];
-  POSITION_MATRIX = LIBS.get_I4();
-  MOVE_MATRIX     = LIBS.get_I4();
-  MODEL_MATRIX    = LIBS.get_I4();
+  POSITION_MATRIX = LIBSMudkip.get_I4();
+  MOVE_MATRIX     = LIBSMudkip.get_I4();
+  MODEL_MATRIX    = LIBSMudkip.get_I4();
   childs=[];
 
   constructor(GL, SHADER_PROGRAM, _position, _color, _normal, _Mmatrix, opts={}) {
@@ -96,12 +96,12 @@ export class BellyPatch {
   }
 
   updateBoneMatrix(){
-    let m=LIBS.get_I4();
-    LIBS.translateLocal(m, ...this.bone.position);
-    LIBS.rotateX(m, this.bone.rotation[0]);
-    LIBS.rotateY(m, this.bone.rotation[1]);
-    LIBS.rotateZ(m, this.bone.rotation[2]);
-    LIBS.scale(m, ...this.bone.scale);
+    let m=LIBSMudkip.get_I4();
+    LIBSMudkip.translateLocal(m, ...this.bone.position);
+    LIBSMudkip.rotateX(m, this.bone.rotation[0]);
+    LIBSMudkip.rotateY(m, this.bone.rotation[1]);
+    LIBSMudkip.rotateZ(m, this.bone.rotation[2]);
+    LIBSMudkip.scale(m, ...this.bone.scale);
     this.POSITION_MATRIX=m;
   }
 
@@ -120,9 +120,9 @@ export class BellyPatch {
   render(PARENT_MATRIX){
     const GL=this.GL;
 
-    const M=LIBS.get_I4();
-    LIBS.mul(M,PARENT_MATRIX,this.POSITION_MATRIX);
-    LIBS.mul(M,M,this.MOVE_MATRIX);
+    const M=LIBSMudkip.get_I4();
+    LIBSMudkip.mul(M,PARENT_MATRIX,this.POSITION_MATRIX);
+    LIBSMudkip.mul(M,M,this.MOVE_MATRIX);
     this.MODEL_MATRIX=M;
 console.assert(this._MMatrix instanceof WebGLUniformLocation, "Mmatrix bukan uniform location!", this._MMatrix);
 
@@ -130,7 +130,7 @@ console.assert(this._MMatrix instanceof WebGLUniformLocation, "Mmatrix bukan uni
     GL.uniformMatrix4fv(this._MMatrix,false,this.MODEL_MATRIX); 
     
     const uNormalMatrix = GL.getUniformLocation(this.SHADER_PROGRAM,"normalMatrix");
-    const n3 = LIBS.get_normal_matrix(this.MODEL_MATRIX);
+    const n3 = LIBSMudkip.get_normal_matrix(this.MODEL_MATRIX);
     GL.uniformMatrix3fv(uNormalMatrix,false,n3);
 
     GL.bindBuffer(GL.ARRAY_BUFFER,this.OBJECT_VERTEX);

@@ -403,4 +403,4 @@ export class MudkipAnimation {
   getAnimationData() {
     return this.animData;
   }
-}  
+}

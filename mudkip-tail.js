@@ -15,8 +15,8 @@ export class MudkipTail {
     lineSegmentCount = 0;
     numVerticalLines = 0;
 
-    POSITION_MATRIX = LIBS.get_I4();
-    MOVE_MATRIX = LIBS.get_I4();
+    POSITION_MATRIX = LIBSMudkip.get_I4();
+    MOVE_MATRIX = LIBSMudkip.get_I4();
 
     childs = [];
 
@@ -163,16 +163,16 @@ export class MudkipTail {
 
 render(PARENT_MATRIX) {
   const GL = this.GL;
-  const M = LIBS.get_I4();
-  LIBS.mul(M, PARENT_MATRIX, this.POSITION_MATRIX);
-  LIBS.mul(M, M, this.MOVE_MATRIX);
+  const M = LIBSMudkip.get_I4();
+  LIBSMudkip.mul(M, PARENT_MATRIX, this.POSITION_MATRIX);
+  LIBSMudkip.mul(M, M, this.MOVE_MATRIX);
   this.MODEL_MATRIX = M;
 
   GL.useProgram(this.SHADER_PROGRAM);
   GL.uniformMatrix4fv(this._MMatrix, false, this.MODEL_MATRIX);
 
   const uNormalMatrix = GL.getUniformLocation(this.SHADER_PROGRAM, "normalMatrix");
-  const normalMat3 = LIBS.get_normal_matrix(this.MODEL_MATRIX);
+  const normalMat3 = LIBSMudkip.get_normal_matrix(this.MODEL_MATRIX);
   GL.uniformMatrix3fv(uNormalMatrix, false, normalMat3);
 
   GL.bindBuffer(GL.ARRAY_BUFFER, this.OBJECT_VERTEX);

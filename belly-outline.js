@@ -3,7 +3,7 @@ const clamp = (v,a,b)=>Math.max(a,Math.min(b,v));
 export class BellyOutline {
   GL=null; SHADER_PROGRAM=null; _position=null; _color=null; _MMatrix=null;
   OBJECT_VERTEX=null; OBJECT_FACES=null; vertex=[]; faces=[];
-  POSITION_MATRIX = LIBS.get_I4(); MOVE_MATRIX = LIBS.get_I4(); MODEL_MATRIX = LIBS.get_I4();
+  POSITION_MATRIX = LIBSMudkip.get_I4(); MOVE_MATRIX = LIBSMudkip.get_I4(); MODEL_MATRIX = LIBSMudkip.get_I4();
 
   constructor(GL, SHADER_PROGRAM, _position, _color, _MMatrix, opts={}) {
     this.GL=GL; this.SHADER_PROGRAM=SHADER_PROGRAM;
@@ -82,9 +82,9 @@ export class BellyOutline {
   }
 
   render(PARENT_MATRIX){
-    const M = LIBS.get_I4();
-    LIBS.mul(M,PARENT_MATRIX,this.POSITION_MATRIX);
-    LIBS.mul(M,M,this.MOVE_MATRIX);
+    const M = LIBSMudkip.get_I4();
+    LIBSMudkip.mul(M,PARENT_MATRIX,this.POSITION_MATRIX);
+    LIBSMudkip.mul(M,M,this.MOVE_MATRIX);
     this.GL.useProgram(this.SHADER_PROGRAM);
     this.GL.uniformMatrix4fv(this._MMatrix,false,M);
 

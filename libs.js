@@ -1,12 +1,11 @@
-
-var LIBS = {
+var LIBSMudkip = {
     degToRad: function (angle) {
         return (angle * Math.PI / 180);
     },
 
 
     get_projection: function (angle, a, zMin, zMax) {
-        var tan = Math.tan(LIBS.degToRad(0.5 * angle)),
+        var tan = Math.tan(LIBSMudkip.degToRad(0.5 * angle)),
             A = -(zMax + zMin) / (zMax - zMin),
             B = (-2 * zMax * zMin) / (zMax - zMin);
 
@@ -142,24 +141,24 @@ scale : function (m, sx, sy, sz) {
 },
 
     composeTRS : function (t) {
-  const m = LIBS.get_I4();
+  const m = LIBSMudkip.get_I4();
   // T then R then S (you can change order if needed)
-  LIBS.translateLocal(m, t.position[0], t.position[1], t.position[2]);
-  LIBS.rotateX(m, t.rotation[0]);
-  LIBS.rotateY(m, t.rotation[1]);
-  LIBS.rotateZ(m, t.rotation[2]);
-  LIBS.scale(m, t.scale[0], t.scale[1], t.scale[2]);
+  LIBSMudkip.translateLocal(m, t.position[0], t.position[1], t.position[2]);
+  LIBSMudkip.rotateX(m, t.rotation[0]);
+  LIBSMudkip.rotateY(m, t.rotation[1]);
+  LIBSMudkip.rotateZ(m, t.rotation[2]);
+  LIBSMudkip.scale(m, t.scale[0], t.scale[1], t.scale[2]);
   return m;
 },
 };
 
-LIBS.multiply = function (a, b) {
+LIBSMudkip.multiply = function (a, b) {
   const out = this.get_I4();
   this.mul(out, a, b);
   return out;
 };
 
-LIBS.get_normal_matrix = function(M){
+LIBSMudkip.get_normal_matrix = function(M){
   const a00=M[0],a01=M[1],a02=M[2];
   const a10=M[4],a11=M[5],a12=M[6];
   const a20=M[8],a21=M[9],a22=M[10];
@@ -183,4 +182,69 @@ LIBS.get_normal_matrix = function(M){
     b01,b11,b21,
     b02,b12,b22
   ]);
+};
+
+LIBSMudkip.lookAt = function(eye, center, up) {
+  // Implementation needed
+};
+
+LIBSMudkip.normalize = function(vec3) {
+  const len = Math.hypot(vec3[0], vec3[1], vec3[2]);
+  return [vec3[0]/len, vec3[1]/len, vec3[2]/len];
+};
+
+LIBSMudkip.cross = function(a, b) {
+  return [
+    a[1] * b[2] - a[2] * b[1],
+    a[2] * b[0] - a[0] * b[2],
+    a[0] * b[1] - a[1] * b[0]
+  ];
+};
+LIBSMudkip.normalize = function(vec3) {
+  const len = Math.hypot(vec3[0], vec3[1], vec3[2]);
+  if (len === 0) return [0, 0, 0];
+  return [vec3[0] / len, vec3[1] / len, vec3[2] / len];
+};
+
+// Cross product of two 3D vectors
+LIBSMudkip.cross = function(a, b) {
+  return [
+    a[1] * b[2] - a[2] * b[1],
+    a[2] * b[0] - a[0] * b[2],
+    a[0] * b[1] - a[1] * b[0]
+  ];
+};
+
+// Dot product of two 3D vectors
+LIBSMudkip.dot = function(a, b) {
+  return a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+};
+
+// Subtract two 3D vectors (a - b)
+LIBSMudkip.subtract = function(a, b) {
+  return [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
+};
+
+// Add two 3D vectors (a + b)
+LIBSMudkip.add = function(a, b) {
+  return [a[0] + b[0], a[1] + b[1], a[2] + b[2]];
+};
+
+// Create lookAt view matrix (FPS camera)
+// eye: camera position [x, y, z]
+// center: point camera is looking at [x, y, z]
+// up: up vector [x, y, z] (usually [0, 1, 0])
+LIBSMudkip.lookAt = function(eye, center, up) {
+  const f = LIBSMudkip.normalize(LIBSMudkip.subtract(center, eye));
+  const s = LIBSMudkip.normalize(LIBSMudkip.cross(f, up));
+  const u = LIBSMudkip.cross(s, f);
+
+  const result = [
+    s[0], u[0], -f[0], 0,
+    s[1], u[1], -f[1], 0,
+    s[2], u[2], -f[2], 0,
+    -LIBSMudkip.dot(s, eye), -LIBSMudkip.dot(u, eye), LIBSMudkip.dot(f, eye), 1
+  ];
+
+  return result;
 };
