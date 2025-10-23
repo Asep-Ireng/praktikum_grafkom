@@ -5,6 +5,9 @@ import { Sky } from './environment/Sky.js';
 import { Ground, createPuddles } from './environment/ground.js';
 import { Water } from './environment/water.js';
 import { Rock } from './environment/rock.js';
+import { Waterfall } from "./environment/waterfall.js";
+import { Mist } from "./environment/mist.js";
+import { Foliage } from "./environment/foliage.js";
 
 function main() {
     /** @type {HTMLCanvasElement} */
@@ -193,7 +196,7 @@ function main() {
         segments: 64            // Smoothness
     });
     water.setup();
-
+    
     // ==================== PUDDLES GENERATION ====================
 
     // PRESET 1: Banyak puddles kecil menyebar merata (20 puddles)
@@ -230,7 +233,7 @@ function main() {
         radius: 35,
         cliffHeight: 1.5,
         segments: 64,
-        noiseAmplitude: 0.05,
+        noiseAmplitude: 0.3,
         puddles: puddlesToUse
     });
     ground.setup();
@@ -243,6 +246,35 @@ function main() {
         seed: 98765
     });
     rocks.setup();
+
+        const waterfall = new Waterfall(GL, SHADER_PROGRAM, _position, _color, _normal, _Mmatrix, {
+        position: [0, 0, -25],      // Behind ground
+        width: 22,                   // Total width
+        height: 12,                  // Height
+        waterLevel: -2.0,            // Match ocean
+        numStreams: 15,               // Number of water columns
+        streamWidth: 5.8,            // Width of each stream
+        streamSpeed: 2.5,            // Animation speed
+        seed: 54321                  // For consistent generation
+    });
+    waterfall.setup();
+
+    const mist = new Mist(GL, SHADER_PROGRAM, _position, _color, _normal, _Mmatrix, {
+        center: [0, -2.0, -25],   // samakan dengan kaki waterfall
+        rings: 3,
+        vertsPerRing: 40,
+        radiusStart: 0.9,
+        radiusEnd: 2.6,
+        speed: 0.7
+    });
+    mist.setup();   
+
+    const foliage = new Foliage(GL, SHADER_PROGRAM, _position, _color, _normal, _Mmatrix, {
+    center: [0, -1.9, -23.6], // area lembap di depan waterfall
+    radius: 5.5,
+    count: 10
+    });
+    foliage.setup();
 
 
     /*========================= FPS CAMERA SETUP ========================= */
@@ -425,13 +457,7 @@ function main() {
         LIBSMudkip.rotateY(skyModelMatrix, time * rotationSpeed);
         sky.render(PROJMATRIX, viewMatrix, skyModelMatrix);
 
-        ground.render(LIBSMudkip.get_I4());
-        rocks.render(LIBSMudkip.get_I4());
-
-        water.updateWaves(time);  // Animate waves
-        water.render(LIBSMudkip.get_I4());
-
-        // Render Mudkip (foreground)
+        // Set uniform global untuk shader utama
         GL.useProgram(SHADER_PROGRAM);
         GL.uniformMatrix4fv(_Pmatrix, false, PROJMATRIX);
         GL.uniformMatrix4fv(_Vmatrix, false, viewMatrix);
@@ -439,6 +465,24 @@ function main() {
         // Update view position for lighting
         GL.uniform3f(uViewPos, cameraPosition[0], cameraPosition[1], cameraPosition[2]);
 
+        ground.render(LIBSMudkip.get_I4());
+        rocks.render(LIBSMudkip.get_I4());
+        
+        foliage.render(LIBSMudkip.get_I4()); // <- Sekarang akan muncul
+
+        waterfall.updateAnimation(time);
+        waterfall.render(LIBSMudkip.get_I4());
+
+        mist.update(time);
+        mist.render(LIBSMudkip.get_I4());     // <- Sekarang akan muncul
+
+        water.updateWaves(time);  // Animate waves
+        water.render(LIBSMudkip.get_I4());
+
+
+        // Render Mudkip (foreground)
+        // Tidak perlu GL.useProgram atau set P/V/viewPos lagi 
+        // karena sudah di-set di atas dan shadernya sama.
         mudkip.CameraRig.render(LIBSMudkip.get_I4());
 
         GL.flush();
