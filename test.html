@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Mega Swampert</title>
+    <style>
+        body { margin: 0; }
+        canvas { display: block; width: 100vw; height: 100vh; }
+    </style>
+
+    <!-- 
+      Vertex Shader:
+      This program runs for every vertex (point) of your shape.
+      It MUST exist, even if we "focus on the model".
+    -->
+    <script id="shader-vs" type="x-shader/x-vertex">
+      attribute vec4 aVertexPosition;
+      attribute vec4 aVertexColor;
+
+      uniform mat4 uModelViewMatrix;
+      uniform mat4 uProjectionMatrix;
+
+      varying lowp vec4 vColor;
+
+      void main(void) {
+        gl_Position = uProjectionMatrix * uModelViewMatrix * aVertexPosition;
+        vColor = aVertexColor;
+      }
+    </script>
+
+    <!-- 
+      Fragment Shader:
+      This program runs for every pixel inside your shape.
+      It also MUST exist. This one just passes the color through.
+    -->
+    <script id="shader-fs" type="x-shader/x-fragment">
+      varying lowp vec4 vColor;
+
+      void main(void) {
+        gl_FragColor = vColor;
+      }
+    </script>
+</head>
+<body>
+    <!-- 
+      IMPORTANT: I've changed the ID to "glCanvas" (with a capital C)
+      to match the JavaScript file. I've also removed the fixed
+      width/height so it fills the screen (see <style> tag).
+    -->
+    <canvas id="glCanvas"></canvas>
+
+    <!-- 
+      Using the gl-matrix URL from our previous working example.
+    -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/gl-matrix/2.8.1/gl-matrix-min.js"></script>
+    
+    <!-- These are the scripts you specified -->
+    <!-- <script src="libs.js"></script> --> <!-- Commented out for now as we don't have it -->
+    <script src="mega_uppertorso.js"></script>
+</body>
+</html>
