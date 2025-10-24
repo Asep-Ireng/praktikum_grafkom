@@ -68,7 +68,7 @@
   // Center fin curve parameters (geometry-time)
   const CENTER_FIN_PARAMS = {
     samplesPerSegment: 32,
-    bandOffset: 0.24,
+    bandOffset: 0.34,
     biasZ: 0.2,
     tipPull: 0.22,
     taperTip: 0.6,
@@ -77,14 +77,14 @@
     bulgeCenter: 0.26,
     bulgeWidth: 0.24,
     controlPts: [
-      [1.45, -6.5],
-      [2.35, -1.4],
-      [1.55, -0.6],
-      [1.3, -0.2],
-      [1.3, 0.2],
-      [1.5, 0.45],
-      [0.85, 1.2],
-      [0.2, 1.27],
+      [1.45, -2.5],
+      [1.55, -1.57],
+      [1.15, -0.8],
+      [1.15, -0.2],
+      [1.30, 0.2],
+      [1.4, 0.45],
+      [0.95, 1.1],
+      [0.2, 1.23],
       [1.1, 0.55],
     ],
   };
