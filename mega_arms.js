@@ -7,14 +7,18 @@
 //   const arms = MegaArms.init(gl);
 //   ...
 //   MegaArms.draw(gl, programInfo, arms, viewMatrix, {
-//     group: {
-//       translate: [0, 0, 0],
-//       rotate: { angle: 0, axis: [0, 1, 0] },
-//       scale: [1, 1, 1],
-//     },
+//     group:
+//       {
+//         translate: [0, 0, 0],
+//         rotate: { angle: 0, axis: [0, 1, 0] },
+//         scale: [1, 1, 1],
+//       },
 //     // Overrides, e.g.:
 //     // FINGER_MID_OFFSET: [0.0, 0.1, -0.2],
 //     // FINGER_SIDE_OFFSET: [0.0, -0.05, 0.25],
+//     // UPPER_YAW: 0.0,           // mirrored Y twist (multiplied by 'side')
+//     // UPPER_YAW_OUT: 0.0,       // additional mirrored toe-out
+//     // FOREARM_TRANSLATE: [0, 0, 0], // forearm-local; X is mirrored
 //   });
 //
 // Requires: glMatrix (mat4). Your shader must provide:
@@ -26,7 +30,7 @@
   // -----------------------------------------------------------
   // Color palette
   //  const ARM_BLUE = [0.18, 0.55, 0.95, 1.0];
-  const ARM_BLUE = [0.58, 0.55, 0.95, 1.0];
+  const ARM_BLUE = [0.18, 0.55, 0.95, 1.0];
   const FINGER_DARK = [0.1, 0.1, 0.12, 1.0];
   const PAD_ORANGE = [1.0, 0.6, 0.0, 1.0];
 
@@ -37,15 +41,17 @@
   const PALM_SCALE = [1.2, 0.7, 1.1]; // palm thickness in Y
 
   const FINGER_BASE_RADIUS = 0.68; // finger sphere before scaling
-  const FINGER_SCALE = [0.70, 0.85, 1.48]; // x width, y height, z length
+  const FINGER_SCALE = [0.7, 0.65, 1.48]; // x width, y height, z length
 
   // -----------------------------------------------------------
   // Pose / placement (torso space). Left arm mirrors X via 'side'.
-  const SHOULDER_OFFSET = [5.55, 0.7, 1.72];
+  const SHOULDER_OFFSET = [3.0, 0.7, 1.72];
 
   // Upper arm orientation
   const UPPER_PITCH_FWD = 0.15; // rotate around X (raise forward)
   const UPPER_ROLL_OUT = -0.3; // rotate around Z (splay outward)
+  const UPPER_YAW = 0.0; // mirrored yaw around Y (multiplied by 'side')
+  const UPPER_YAW_OUT = 0.6; // additional mirrored toe-out (multiplied by 'side')
 
   // Forearm anchor relative to shoulder (in torso space)
   const ELBOW_FROM_SHOULDER = [-0.1, -0.2, 2.22];
@@ -53,7 +59,9 @@
   // Forearm orientation
   const FOREARM_PITCH_FWD = -0.12; // X (bend)
   const FOREARM_ROLL_OUT = 0.12; // Z (splay)
-  const FOREARM_YAW_OUT = -0.12; // Y (toe-out). Multiplied by 'side'.
+  const FOREARM_YAW_OUT = -0.62; // Y (toe-out). Multiplied by 'side'.
+  // Forearm-local translation (after pitch/roll, before yaw). X is mirrored.
+  const FOREARM_TRANSLATE = [-0.5, 0.0, 0.0];
 
   // Palm (wrist) placement/orientation relative to forearm center
   const PALM_DROP = 1.05; // move down from forearm
@@ -72,7 +80,7 @@
 
   // Finger cluster base offsets (palm local)
   const FINGER_FORWARD = 3.05;
-  const FINGER_DOWN = -0.2;
+  const FINGER_DOWN = -0.5;
   const FINGER_SPREAD_X = 1.8;
   const FINGER_MID_OFFSET_X = 0.0;
   const FINGER_ROW_Z_BIAS = -0.28;
@@ -112,10 +120,12 @@
     // orientations
     UPPER_PITCH_FWD,
     UPPER_ROLL_OUT,
-    UPPER_YAW_OUT: 0.0,
+    UPPER_YAW,
+    UPPER_YAW_OUT,
     FOREARM_PITCH_FWD,
     FOREARM_ROLL_OUT,
     FOREARM_YAW_OUT,
+    FOREARM_TRANSLATE,
 
     // palm/wrist
     PALM_DROP,
@@ -180,7 +190,12 @@
     // Fingers: bigger base radius
     const finger = makeBufferSet(
       gl,
-      createSphereArrays(FINGER_DARK, 24, 24, DEFAULTS.FINGER_BASE_RADIUS)
+      createSphereArrays(
+        FINGER_DARK,
+        24,
+        24,
+        DEFAULTS.FINGER_BASE_RADIUS
+      )
     );
 
     // Orange pads
@@ -270,11 +285,11 @@
       const shoulderFrame = mat4.clone(root);
       mat4.translate(shoulderFrame, shoulderFrame, shoulder);
 
-      // Order: yaw (sideways) -> pitch (raise) -> roll (splay)
+      // yaw is mirrored: side * (UPPER_YAW + UPPER_YAW_OUT)
       mat4.rotate(
         shoulderFrame,
         shoulderFrame,
-        side * cfg.UPPER_YAW_OUT,
+        side * (cfg.UPPER_YAW + (cfg.UPPER_YAW_OUT || 0.0)),
         [0, 1, 0]
       );
       mat4.rotate(
@@ -303,15 +318,16 @@
         cfg.ELBOW_FROM_SHOULDER[2],
       ]);
 
-      // 4) Forearm on that base (its own bend/splay/yaw)
+      // 4) Forearm on that base (its own bend/splay/yaw + local translate)
       const faM = mat4.clone(faBase);
       mat4.rotate(faM, faM, cfg.FOREARM_PITCH_FWD, [1, 0, 0]);
-      mat4.rotate(
-        faM,
-        faM,
-        side * cfg.FOREARM_ROLL_OUT,
-        [0, 0, 1]
-      );
+      mat4.rotate(faM, faM, side * cfg.FOREARM_ROLL_OUT, [0, 0, 1]);
+      // forearm-local translation (X mirrored by side)
+      mat4.translate(faM, faM, [
+        cfg.FOREARM_TRANSLATE[0] * side,
+        cfg.FOREARM_TRANSLATE[1],
+        cfg.FOREARM_TRANSLATE[2],
+      ]);
       mat4.rotate(faM, faM, side * cfg.FOREARM_YAW_OUT, [0, 1, 0]);
       mat4.scale(faM, faM, cfg.FOREARM_SCALE);
       drawSet(buffers.forearm, faM);
@@ -319,19 +335,19 @@
       // 5) Palm inherits forearm frame
       const palmM = mat4.clone(faBase);
       mat4.rotate(palmM, palmM, cfg.FOREARM_PITCH_FWD, [1, 0, 0]);
-      mat4.rotate(
-        palmM,
-        palmM,
-        side * cfg.FOREARM_ROLL_OUT,
-        [0, 0, 1]
-      );
-      mat4.rotate(
-        palmM,
-        palmM,
-        side * cfg.FOREARM_YAW_OUT,
-        [0, 1, 0]
-      );
-      mat4.translate(palmM, palmM, [0, -cfg.PALM_DROP, cfg.PALM_FORWARD]);
+      mat4.rotate(palmM, palmM, side * cfg.FOREARM_ROLL_OUT, [0, 0, 1]);
+      // forearm-local translation (X mirrored by side)
+      mat4.translate(palmM, palmM, [
+        cfg.FOREARM_TRANSLATE[0] * side,
+        cfg.FOREARM_TRANSLATE[1],
+        cfg.FOREARM_TRANSLATE[2],
+      ]);
+      mat4.rotate(palmM, palmM, side * cfg.FOREARM_YAW_OUT, [0, 1, 0]);
+      mat4.translate(palmM, palmM, [
+        0,
+        -cfg.PALM_DROP,
+        cfg.PALM_FORWARD,
+      ]);
       if (cfg.flipUpperHemispherePalm) {
         mat4.rotate(palmM, palmM, Math.PI, [1, 0, 0]);
       }
@@ -345,6 +361,12 @@
       const pcM = mat4.clone(faBase);
       mat4.rotate(pcM, pcM, cfg.FOREARM_PITCH_FWD, [1, 0, 0]);
       mat4.rotate(pcM, pcM, side * cfg.FOREARM_ROLL_OUT, [0, 0, 1]);
+      // forearm-local translation (X mirrored by side)
+      mat4.translate(pcM, pcM, [
+        cfg.FOREARM_TRANSLATE[0] * side,
+        cfg.FOREARM_TRANSLATE[1],
+        cfg.FOREARM_TRANSLATE[2],
+      ]);
       mat4.rotate(pcM, pcM, side * cfg.FOREARM_YAW_OUT, [0, 1, 0]);
       mat4.translate(pcM, pcM, cfg.PAD_CENTER_OFF);
       mat4.rotate(pcM, pcM, cfg.PAD_TILT_X, [1, 0, 0]);
@@ -354,12 +376,13 @@
       for (const sgn of [-1, +1]) {
         const psM = mat4.clone(faBase);
         mat4.rotate(psM, psM, cfg.FOREARM_PITCH_FWD, [1, 0, 0]);
-        mat4.rotate(
-          psM,
-          psM,
-          side * cfg.FOREARM_ROLL_OUT,
-          [0, 0, 1]
-        );
+        mat4.rotate(psM, psM, side * cfg.FOREARM_ROLL_OUT, [0, 0, 1]);
+        // forearm-local translation (X mirrored by side)
+        mat4.translate(psM, psM, [
+          cfg.FOREARM_TRANSLATE[0] * side,
+          cfg.FOREARM_TRANSLATE[1],
+          cfg.FOREARM_TRANSLATE[2],
+        ]);
         mat4.rotate(psM, psM, side * cfg.FOREARM_YAW_OUT, [0, 1, 0]);
         mat4.translate(psM, psM, [
           cfg.PAD_SIDE_X * sgn,
@@ -393,22 +416,18 @@
       for (let i = 0; i < 3; i++) {
         const fM = mat4.clone(faBase);
         mat4.rotate(fM, fM, cfg.FOREARM_PITCH_FWD, [1, 0, 0]);
-        mat4.rotate(
-          fM,
-          fM,
-          side * cfg.FOREARM_ROLL_OUT,
-          [0, 0, 1]
-        );
+        mat4.rotate(fM, fM, side * cfg.FOREARM_ROLL_OUT, [0, 0, 1]);
+        // forearm-local translation (X mirrored by side)
+        mat4.translate(fM, fM, [
+          cfg.FOREARM_TRANSLATE[0] * side,
+          cfg.FOREARM_TRANSLATE[1],
+          cfg.FOREARM_TRANSLATE[2],
+        ]);
         mat4.rotate(fM, fM, side * cfg.FOREARM_YAW_OUT, [0, 1, 0]);
         mat4.translate(fM, fM, [0, -cfg.PALM_DROP, 0]);
 
         // Finger cluster rotation
-        mat4.rotate(
-          fM,
-          fM,
-          cfg.FINGER_CLUSTER_ROT.pitch,
-          [1, 0, 0]
-        );
+        mat4.rotate(fM, fM, cfg.FINGER_CLUSTER_ROT.pitch, [1, 0, 0]);
         mat4.rotate(
           fM,
           fM,
@@ -423,7 +442,7 @@
         );
 
         // Base finger anchor
-        let [bx, by, bz] = fingersBase[i];
+        const [bx, by, bz] = fingersBase[i];
 
         // Apply extra per-group offsets (palm-local).
         // Mirror X by 'side' so positive dx is "outward" on both arms.
@@ -439,18 +458,8 @@
 
         // Per-finger rotations
         mat4.rotate(fM, fM, cfg.FINGER_ROT[i].pitch, [1, 0, 0]);
-        mat4.rotate(
-          fM,
-          fM,
-          side * cfg.FINGER_ROT[i].yaw,
-          [0, 1, 0]
-        );
-        mat4.rotate(
-          fM,
-          fM,
-          side * cfg.FINGER_ROT[i].roll,
-          [0, 0, 1]
-        );
+        mat4.rotate(fM, fM, side * cfg.FINGER_ROT[i].yaw, [0, 1, 0]);
+        mat4.rotate(fM, fM, side * cfg.FINGER_ROT[i].roll, [0, 0, 1]);
 
         // Scale to finger shape and draw
         mat4.scale(fM, fM, cfg.FINGER_SCALE);

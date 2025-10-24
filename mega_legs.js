@@ -4,12 +4,12 @@
   const SLIT_DARK = [0.04, 0.05, 0.06, 1.0];
 
   const THIGH_RADIUS = 1.0;
-  const THIGH_SCALE = [0.85, 1.35, 0.95];
+  const THIGH_SCALE = [0.55, 1.35, 0.95];
 
   const FOOT_RADIUS = 0.75;
-  const FOOT_SCALE = [1.55, 1.0, 1.15];
+  const FOOT_SCALE = [1.55, 1.0, 0.85];
 
-  const HIP_OFFSET = [1.65, -0.55, 0.55];
+  const HIP_OFFSET = [1.25, -0.55, 0.55];
   const THIGH_TILT_OUT = 0.2;
   const THIGH_TILT_FWD = -0.1;
   const ANKLE_DROP = 1.35;
@@ -30,8 +30,23 @@
     THIGH_SCALE,
     FOOT_SCALE,
 
-    FOOT_YAW_OUT: 1.8,
-    FOOT_PITCH: -0.06,
+    // Existing foot controls (back-compat)
+    FOOT_YAW_OUT: 1.8, // yaw outward per side (applied with +/- side factor)
+    FOOT_PITCH: -0.06, // base pitch
+
+    // New foot transform options
+    // Local offset applied after ankle drop/forward, before rotations.
+    // X is mirrored by default across feet.
+    FOOT_LOCAL_TRANSLATE: [0.2, 0.0, -0.2],
+    FOOT_LOCAL_MIRROR_X: true,
+
+    // Extra per-foot Euler rotations (applied after base pitch/yaw-out)
+    FOOT_EXTRA_PITCH: 0.0, // radians around X
+    FOOT_EXTRA_YAW: 0.0, // radians around Y
+    FOOT_ROLL: 0.0, // radians around Z
+
+    // Optional arbitrary-axis rotation applied last (after Euler extras)
+    FOOT_ROTATE: { angle: 0.0, axis: [0, 0, 1] },
 
     flipUpperHemisphereFoot: false,
 
@@ -64,7 +79,7 @@
     FRONT_HALF: {
       enabled: true,
       // Base placement
-      x: -0.40,
+      x: -0.4,
       y: 0.04,
       z: 0.0,
       inset: 0.03, // inward push along -Z
@@ -76,12 +91,10 @@
       color: SLIT_DARK,
       mirrorX: true, // x is "outward" on both feet
 
-
-
       // Duplication around the center
       count: 2, // 1=center only; 3=center + left/right; etc.
       spacingX: 0.46, // gap between neighboring slits along X
-      spacingAxis: "x",   // "x" | "y" | "z" (axis to spread along)
+      spacingAxis: "x", // "x" | "y" | "z" (axis to spread along)
       spacingSpace: "slit", // "slit" = after orientation (recommended)
 
       // Optional outward "fan" for side slits
@@ -214,11 +227,52 @@
       const footM = mat4.clone(root);
       mat4.translate(footM, footM, hip);
       mat4.translate(footM, footM, [0, -cfg.ANKLE_DROP, cfg.FOOT_FORWARD]);
+
+      // Local offset before rotations; mirror X across feet if enabled
+      if (cfg.FOOT_LOCAL_TRANSLATE) {
+        const t = cfg.FOOT_LOCAL_TRANSLATE;
+        const mirror =
+          cfg.FOOT_LOCAL_MIRROR_X === undefined ||
+          cfg.FOOT_LOCAL_MIRROR_X === true;
+        const tx = (mirror ? side : 1) * (t[0] || 0);
+        const ty = t[1] || 0;
+        const tz = t[2] || 0;
+        mat4.translate(footM, footM, [tx, ty, tz]);
+      }
+
       if (cfg.flipUpperHemisphereFoot) {
         mat4.rotate(footM, footM, Math.PI, [1, 0, 0]);
       }
-      mat4.rotate(footM, footM, cfg.FOOT_PITCH, [1, 0, 0]);
-      mat4.rotate(footM, footM, side * cfg.FOOT_YAW_OUT, [0, 1, 0]);
+
+      // Base rotations (back-compat)
+      if (cfg.FOOT_PITCH) {
+        mat4.rotate(footM, footM, cfg.FOOT_PITCH, [1, 0, 0]);
+      }
+      if (cfg.FOOT_YAW_OUT) {
+        mat4.rotate(footM, footM, side * cfg.FOOT_YAW_OUT, [0, 1, 0]);
+      }
+
+      // Extra Euler controls
+      if (cfg.FOOT_EXTRA_PITCH) {
+        mat4.rotate(footM, footM, cfg.FOOT_EXTRA_PITCH, [1, 0, 0]);
+      }
+      if (cfg.FOOT_EXTRA_YAW) {
+        mat4.rotate(footM, footM, cfg.FOOT_EXTRA_YAW, [0, 1, 0]);
+      }
+      if (cfg.FOOT_ROLL) {
+        mat4.rotate(footM, footM, cfg.FOOT_ROLL, [0, 0, 1]);
+      }
+
+      // Optional arbitrary-axis rotation
+      if (cfg.FOOT_ROTATE && cfg.FOOT_ROTATE.angle) {
+        mat4.rotate(
+          footM,
+          footM,
+          cfg.FOOT_ROTATE.angle,
+          cfg.FOOT_ROTATE.axis || [0, 0, 1]
+        );
+      }
+
       mat4.scale(footM, footM, cfg.FOOT_SCALE);
       drawSet(buffers.foot, footM);
 
@@ -262,20 +316,16 @@
           }
           // 3) Apply spacing in slit-local space along the chosen axis
           const ax = fh.spacingAxis || "x";
-          const tx =
-            ax === "x" ? d : 0;
-          const ty =
-            ax === "y" ? d : 0;
-          const tz =
-            ax === "z" ? d : 0;
+          const tx = ax === "x" ? d : 0;
+          const ty = ax === "y" ? d : 0;
+          const tz = ax === "z" ? d : 0;
           mat4.translate(m, m, [tx, ty, tz]);
 
           // Fan for side slits (dx sign decides left/right)
           if (fh.fan) {
             const lr = Math.sign(d) || 0; // 0 for center
             const outward = fh.fan.outward !== false ? side : 1;
-            if (fh.fan.pitch)
-              mat4.rotate(m, m, lr * fh.fan.pitch, [1, 0, 0]);
+            if (fh.fan.pitch) mat4.rotate(m, m, lr * fh.fan.pitch, [1, 0, 0]);
             if (fh.fan.yaw)
               mat4.rotate(m, m, outward * lr * fh.fan.yaw, [0, 1, 0]);
             if (fh.fan.roll)
@@ -323,7 +373,7 @@
       const sinT = Math.sin(theta);
       const cosT = Math.cos(theta);
 
-      for (let lon = 0; lon <= lonBands; lon++) {
+    for (let lon = 0; lon <= lonBands; lon++) {
         const phi = (lon * 2 * Math.PI) / lonBands;
         const sinP = Math.sin(phi);
         const cosP = Math.cos(phi);
@@ -453,25 +503,25 @@
     const position = gl.createBuffer();
     gl.bindBuffer(gl.ARRAY_BUFFER, position);
     gl.bufferData(
-        gl.ARRAY_BUFFER,
-        new Float32Array(data.positions),
-        gl.STATIC_DRAW
+      gl.ARRAY_BUFFER,
+      new Float32Array(data.positions),
+      gl.STATIC_DRAW
     );
 
     const color = gl.createBuffer();
     gl.bindBuffer(gl.ARRAY_BUFFER, color);
     gl.bufferData(
-        gl.ARRAY_BUFFER,
-        new Float32Array(data.colors),
-        gl.STATIC_DRAW
+      gl.ARRAY_BUFFER,
+      new Float32Array(data.colors),
+      gl.STATIC_DRAW
     );
 
     const indices = gl.createBuffer();
     gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, indices);
     gl.bufferData(
-        gl.ELEMENT_ARRAY_BUFFER,
-        new Uint16Array(data.indices),
-        gl.STATIC_DRAW
+      gl.ELEMENT_ARRAY_BUFFER,
+      new Uint16Array(data.indices),
+      gl.STATIC_DRAW
     );
 
     return {

@@ -18,7 +18,7 @@
 (function (global) {
   // -----------------------------------------------------------
   // Palette
-  const BLUE = [0.2, 0.4, 1.0, 1.0];
+  const BLUE = [0.18, 0.55, 0.95, 1.0];
   const WHITE = [0.95, 0.95, 0.95, 1.0];
   const DARK = [0.14, 0.14, 0.14, 1.0];
   const ORANGE = [1.0, 0.6, 0.0, 1.0];
@@ -49,42 +49,42 @@
       translate: [0, 0, 0],
     },
     rightCheekPad: {
-      translate: [1.0, 0.02, 0.0],
+      translate: [0.9, 0.22, -0.4],
       rotateA: { angle: -Math.PI / 2, axis: [1.1, 1, -0.1] },
-      rotateB: { angle: Math.PI / 10, axis: [2, 4, 0.7] },
-      scale: [0.8, 1.0, 2.0],
+      rotateB: { angle: Math.PI / 10, axis: [2, 2, 0.7] },
+      scale: [1.3, 1.5, 3.5],
     },
     leftCheekPad: {
       mirrorX: true,
-      translate: [1.0, 0.02, 0.0],
+      translate: [0.9, 0.22, -0.4],
       rotateA: { angle: -Math.PI / 2, axis: [1.1, 1, -0.1] },
-      rotateB: { angle: Math.PI / 10, axis: [2, 4, 0.7] },
-      scale: [0.8, 1.0, 2.0],
+      rotateB: { angle: Math.PI / 10, axis: [2, 2, 0.7] },
+      scale: [1.3, 1.5, 3.5],
     },
     spikes: {
-      frameScale: [1.8, 1.4, 1.2], // X is signed by 'side'
-      frameTranslate: [0.7, 0.14, 0.4],
-      frameRotateA: { angle: -Math.PI / 2, axis: [2.0, 1, -0.1] },
-      frameRotateB: { angle: Math.PI / 10, axis: [2, 4, 0.7] },
+      frameScale: [1.7, 1.5, 2.7], // X is signed by 'side'
+      frameTranslate: [0.8, 0.54, 0.],
+      frameRotateA: { angle: -Math.PI / 2, axis: [1.2, 0.8, -0.1] },
+      frameRotateB: { angle: Math.PI / 10, axis: [2, 2, 1.7] },
       cones: [
         {
-          offset: [0.18, 0.3, 0.06],
+          offset: [0.05, 0.08, -0.16],
           tiltZ: 0.6,
           sweepY: -0.4,
           len: 1.65,
           r: 0.16,
         },
         {
-          offset: [0.14, 0.08, -0.0],
+          offset: [0.14, -0.12, -0.20],
           tiltZ: 0.18,
           sweepY: -0.55,
           len: 1.25,
           r: 0.145,
         },
         {
-          offset: [0.12, -0.22, -0.08],
+          offset: [0.12, -0.22, -0.18],
           tiltZ: -0.5,
-          sweepY: -0.42,
+          sweepY: 0.42,
           len: 1.1,
           r: 0.135,
         },
