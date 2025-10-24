@@ -1,11 +1,12 @@
 // mega_head.js (modular, reusable, grouped transforms, no canvas/shaders/loop)
-// Mega Swampert — Head (top/bottom hemispheres, cheek pads, spikes, eyes, nose)
+// Mega Swampert — Head (top/bottom hemispheres, cheek pads, spikes, eyes,
+// nose, eyebrows)
 //
 // Usage:
 //   const head = MegaHead.init(gl);
 //   // In your render loop:
 //   MegaHead.draw(gl, programInfo, head, viewMatrix, {
-//     group: { translate: [0, 1.6, 0.8], scale: [1.0, 1.0, 1.0] } // move/scale the whole head
+//     group: { translate: [0, 1.6, 0.8], scale: [1.0, 1.0, 1.0] }
 //     // ...optional per-part overrides (see defaults below)
 //   });
 //
@@ -29,10 +30,10 @@
   const DEFAULTS = {
     // Group transform applied to the ENTIRE head assembly
     group: {
-      translate: [0, 0, 5],
+      translate: [0, -2.6, 2],
       // Optional rotation for the whole head
-      rotate: { angle: 0.0, axis: [0, 1, 0] },
-      scale: [2, 2, 2],
+      rotate: { angle: 0.3, axis: [1, 0, 0] },
+      scale: [1.4, 1.4, 1.4],
     },
 
     top: {
@@ -66,16 +67,34 @@
       frameRotateA: { angle: -Math.PI / 2, axis: [2.0, 1, -0.1] },
       frameRotateB: { angle: Math.PI / 10, axis: [2, 4, 0.7] },
       cones: [
-        { offset: [0.18, 0.3, 0.06], tiltZ: 0.6, sweepY: -0.4, len: 1.65, r: 0.16 },
-        { offset: [0.14, 0.08, -0.0], tiltZ: 0.18, sweepY: -0.55, len: 1.25, r: 0.145 },
-        { offset: [0.12, -0.22, -0.08], tiltZ: -0.5, sweepY: -0.42, len: 1.1, r: 0.135 },
+        {
+          offset: [0.18, 0.3, 0.06],
+          tiltZ: 0.6,
+          sweepY: -0.4,
+          len: 1.65,
+          r: 0.16,
+        },
+        {
+          offset: [0.14, 0.08, -0.0],
+          tiltZ: 0.18,
+          sweepY: -0.55,
+          len: 1.25,
+          r: 0.145,
+        },
+        {
+          offset: [0.12, -0.22, -0.08],
+          tiltZ: -0.5,
+          sweepY: -0.42,
+          len: 1.1,
+          r: 0.135,
+        },
       ],
     },
     eye: {
       baseTranslate: [0.56, 0.4, 0.9], // X is signed by 'side'
       yawOut: 0.32,
       pitch: 0.15,
-      rollIn: -0.65, // negative rolls inner corner down on right (+side)
+      rollIn: 0.65, // negative rolls inner corner down on right (+side)
       pupilOffset: [-0.05, 0.03, 0.055], // X is signed by 'side'
       highlightOffset: [0.06, 0.08, 0.07], // X is signed by 'side'
     },
@@ -85,12 +104,34 @@
       pitchDown: -0.15,
       roll: 0.25,
     },
+    // Eyebrows (thin prisms), mirrored on X per side
+    eyebrow: {
+      baseTranslate: [0.58, 0.62, 0.93],
+      yawOut: 0.32,
+      pitch: 0.12,
+      rollIn: 0.2,
+      size: { w: 0.32, h: 0.06, t: 0.03 },
+      offset: [0.0, 0.0, 0.0],
+    },
   };
 
   // Geometry-time params
   const HEMI_BANDS = { lat: 30, lon: 30, radius: 1.0, offsetY: 0.0 };
-  const GROOVE = { segments: 24, amplitude: 0.06, height: 0.03, radius: 1.0 * 1.05 };
-  const CHEEK = { radius: 1.0, xCut: 0.5, thickness: 0.2, segments: 24 };
+  const GROOVE = {
+    segments: 20,
+    amplitude: 0.06,
+    height: 0.03,
+    radius: 1.0 * 1.05,
+  };
+  // Cheek pad: taper so edges/top/bottom are thinner
+  const CHEEK = {
+    radius: 1.0,
+    xCut: 0.5,
+    thickness: 0.2,
+    segments: 24,
+    edge: { narrow: 1.4, spread: 0.08 },
+    topBottom: { narrow: 0.75, spread: 0.1 },
+  };
   const CONE_SEGMENTS = 28;
   const EYE = {
     irisRx: 0.2,
@@ -141,14 +182,15 @@
       GROOVE.radius
     );
 
-    // Cheek pads (circular segment extruded)
+    // Cheek pads (circular segment extruded with taper)
     const rightCheekPad = createCheekBaseGeometry(
       gl,
       ORANGE,
       CHEEK.radius,
       CHEEK.xCut,
       CHEEK.thickness,
-      CHEEK.segments
+      CHEEK.segments,
+      { edge: CHEEK.edge, topBottom: CHEEK.topBottom }
     );
     const leftCheekPad = createCheekBaseGeometry(
       gl,
@@ -156,7 +198,8 @@
       CHEEK.radius,
       CHEEK.xCut,
       CHEEK.thickness,
-      CHEEK.segments
+      CHEEK.segments,
+      { edge: CHEEK.edge, topBottom: CHEEK.topBottom }
     );
 
     // Reusable cone for spikes
@@ -196,6 +239,15 @@
       NOSTRIL.seg
     );
 
+    // Eyebrow prism (reused for both sides)
+    const eyebrow = createRectPrismGeometry(
+      gl,
+      BLACK,
+      DEFAULTS.eyebrow.size.w,
+      DEFAULTS.eyebrow.size.h,
+      DEFAULTS.eyebrow.size.t
+    );
+
     return {
       top,
       bottom,
@@ -207,6 +259,7 @@
       eyePupil,
       eyeHighlight,
       nostril,
+      eyebrow,
     };
   }
 
@@ -222,7 +275,12 @@
       mat4.translate(root, root, cfg.group.translate);
     }
     if (cfg.group && cfg.group.rotate && cfg.group.rotate.angle) {
-      mat4.rotate(root, root, cfg.group.rotate.angle, cfg.group.rotate.axis || [0, 1, 0]);
+      mat4.rotate(
+        root,
+        root,
+        cfg.group.rotate.angle,
+        cfg.group.rotate.axis || [0, 1, 0]
+      );
     }
     if (cfg.group && cfg.group.scale) {
       mat4.scale(root, root, cfg.group.scale);
@@ -401,6 +459,23 @@
     drawEye(+1);
     drawEye(-1);
 
+    // Eyebrows (angry slant)
+    function drawEyebrow(side) {
+      const m = mat4.clone(root);
+      mat4.translate(m, m, [
+        cfg.eyebrow.baseTranslate[0] * side +
+          cfg.eyebrow.offset[0] * side,
+        cfg.eyebrow.baseTranslate[1] + cfg.eyebrow.offset[1],
+        cfg.eyebrow.baseTranslate[2] + cfg.eyebrow.offset[2],
+      ]);
+      mat4.rotate(m, m, side * cfg.eyebrow.yawOut, [0, 1, 0]);
+      mat4.rotate(m, m, cfg.eyebrow.pitch, [1, 0, 0]);
+      mat4.rotate(m, m, side * cfg.eyebrow.rollIn, [0, 0, 1]);
+      drawSet(buffers.eyebrow, m);
+    }
+    drawEyebrow(+1);
+    drawEyebrow(-1);
+
     // Nostrils
     function drawNostril(side) {
       const m = mat4.clone(root);
@@ -452,7 +527,9 @@
         const z = sinPhi * sinTheta;
 
         positions.push(radius * x);
-        positions.push(radius * y + (isTopHemisphere ? offsetY : -offsetY));
+        positions.push(
+          radius * y + (isTopHemisphere ? offsetY : -offsetY)
+        );
         positions.push(radius * z);
         colors.push(...color);
       }
@@ -473,7 +550,14 @@
 
   // -----------------------------------------------------------
   // Geometry: zig-zag ring for the cheek line (returns GL buffers)
-  function createGroovesGeometry(gl, color, segments, amplitude, height, radius) {
+  function createGroovesGeometry(
+    gl,
+    color,
+    segments,
+    amplitude,
+    height,
+    radius
+  ) {
     const positions = [];
     const colors = [];
     const indices = [];
@@ -502,11 +586,19 @@
 
     const position = gl.createBuffer();
     gl.bindBuffer(gl.ARRAY_BUFFER, position);
-    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(positions), gl.STATIC_DRAW);
+    gl.bufferData(
+      gl.ARRAY_BUFFER,
+      new Float32Array(positions),
+      gl.STATIC_DRAW
+    );
 
     const colorBuf = gl.createBuffer();
     gl.bindBuffer(gl.ARRAY_BUFFER, colorBuf);
-    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(colors), gl.STATIC_DRAW);
+    gl.bufferData(
+      gl.ARRAY_BUFFER,
+      new Float32Array(colors),
+      gl.STATIC_DRAW
+    );
 
     const index = gl.createBuffer();
     gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, index);
@@ -526,12 +618,31 @@
 
   // -----------------------------------------------------------
   // Geometry: cheek pad base (circular segment extruded along Z) -> GL buffers
-  function createCheekBaseGeometry(gl, color, radius, xCut, thickness, segments) {
+  function createCheekBaseGeometry(
+    gl,
+    color,
+    radius,
+    xCut,
+    thickness,
+    segments,
+    taperOpts
+  ) {
     const positions = [];
-    theIndices = [];
     const colors = [];
     const indices = [];
     const halfT = thickness * 0.5;
+
+    const clamp01 = (v) => Math.max(0, Math.min(1, v));
+    const smoothstep = (e0, e1, x) => {
+      const t = clamp01((x - e0) / Math.max(1e-6, e1 - e0));
+      return t * t * (3 - 2 * t);
+    };
+    const edge = (taperOpts && taperOpts.edge) || {
+      narrow: 0,
+      spread: 0.6,
+    };
+    const tb =
+      (taperOpts && taperOpts.topBottom) || { narrow: 0, spread: 0.2 };
 
     const eps = 1e-5;
     xCut = Math.max(-radius + eps, Math.min(radius - eps, xCut));
@@ -551,21 +662,38 @@
 
     const n = boundary.length / 3;
 
-    // front
+    // front/back with variable local thickness: narrower at ends and top/bottom
+    const endSpreadCount = Math.max(1, Math.floor((n - 1) * edge.spread));
     for (let i = 0; i < n; i++) {
-      positions.push(boundary[i * 3 + 0], boundary[i * 3 + 1], +halfT);
+      const x = boundary[i * 3 + 0];
+      const y = boundary[i * 3 + 1];
+      const dEnd = Math.min(i, n - 1 - i);
+      const endProx = 1 - clamp01(dEnd / Math.max(1, endSpreadCount));
+      const yNorm = Math.min(1, Math.abs(y) / Math.max(1e-6, yCut));
+      const tbProx = smoothstep(1 - tb.spread, 1, yNorm);
+      const scale = 1 - Math.max(edge.narrow * endProx, tb.narrow * tbProx);
+      const h = Math.max(halfT * 0.3, halfT * scale);
+      positions.push(x, y, +h);
       colors.push(...color);
     }
-    // back
     for (let i = 0; i < n; i++) {
-      positions.push(boundary[i * 3 + 0], boundary[i * 3 + 1], -halfT);
+      const x = boundary[i * 3 + 0];
+      const y = boundary[i * 3 + 1];
+      const dEnd = Math.min(i, n - 1 - i);
+      const endProx = 1 - clamp01(dEnd / Math.max(1, endSpreadCount));
+      const yNorm = Math.min(1, Math.abs(y) / Math.max(1e-6, yCut));
+      const tbProx = smoothstep(1 - tb.spread, 1, yNorm);
+      const scale = 1 - Math.max(edge.narrow * endProx, tb.narrow * tbProx);
+      const h = Math.max(halfT * 0.3, halfT * scale);
+      positions.push(x, y, -h);
       colors.push(...color);
     }
 
     // caps
     for (let i = 1; i < n - 1; i++) indices.push(0, i, i + 1);
     const N = n;
-    for (let i = 1; i < n - 1; i++) indices.push(N + 0, N + i + 1, N + i);
+    for (let i = 1; i < n - 1; i++)
+      indices.push(N + 0, N + i + 1, N + i);
 
     // side walls
     for (let i = 0; i < n; i++) {
@@ -579,11 +707,19 @@
 
     const position = gl.createBuffer();
     gl.bindBuffer(gl.ARRAY_BUFFER, position);
-    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(positions), gl.STATIC_DRAW);
+    gl.bufferData(
+      gl.ARRAY_BUFFER,
+      new Float32Array(positions),
+      gl.STATIC_DRAW
+    );
 
     const colorBuf = gl.createBuffer();
     gl.bindBuffer(gl.ARRAY_BUFFER, colorBuf);
-    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(colors), gl.STATIC_DRAW);
+    gl.bufferData(
+      gl.ARRAY_BUFFER,
+      new Float32Array(colors),
+      gl.STATIC_DRAW
+    );
 
     const index = gl.createBuffer();
     gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, index);
@@ -602,7 +738,8 @@
   }
 
   // -----------------------------------------------------------
-  // Geometry: reusable UNIT cone (axis +X, base at x=0, tip at x=1) -> GL buffers
+  // Geometry: reusable UNIT cone (axis +X, base at x=0, tip at x=1) -> GL
+  // buffers
   function createUnitConeGeometry(gl, color, segments) {
     const positions = [];
     const colors = [];
@@ -634,11 +771,19 @@
 
     const position = gl.createBuffer();
     gl.bindBuffer(gl.ARRAY_BUFFER, position);
-    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(positions), gl.STATIC_DRAW);
+    gl.bufferData(
+      gl.ARRAY_BUFFER,
+      new Float32Array(positions),
+      gl.STATIC_DRAW
+    );
 
     const colorBuf = gl.createBuffer();
     gl.bindBuffer(gl.ARRAY_BUFFER, colorBuf);
-    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(colors), gl.STATIC_DRAW);
+    gl.bufferData(
+      gl.ARRAY_BUFFER,
+      new Float32Array(colors),
+      gl.STATIC_DRAW
+    );
 
     const index = gl.createBuffer();
     gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, index);
@@ -658,7 +803,14 @@
 
   // -----------------------------------------------------------
   // Geometry: ellipse disc (extruded along +Z) -> GL buffers
-  function createEllipseDiscGeometry(gl, color, rx, ry, thickness, segments) {
+  function createEllipseDiscGeometry(
+    gl,
+    color,
+    rx,
+    ry,
+    thickness,
+    segments
+  ) {
     const h = thickness * 0.5;
     const positions = [];
     const colors = [];
@@ -709,11 +861,83 @@
 
     const position = gl.createBuffer();
     gl.bindBuffer(gl.ARRAY_BUFFER, position);
-    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(positions), gl.STATIC_DRAW);
+    gl.bufferData(
+      gl.ARRAY_BUFFER,
+      new Float32Array(positions),
+      gl.STATIC_DRAW
+    );
 
     const colorBuf = gl.createBuffer();
     gl.bindBuffer(gl.ARRAY_BUFFER, colorBuf);
-    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(colors), gl.STATIC_DRAW);
+    gl.bufferData(
+      gl.ARRAY_BUFFER,
+      new Float32Array(colors),
+      gl.STATIC_DRAW
+    );
+
+    const index = gl.createBuffer();
+    gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, index);
+    gl.bufferData(
+      gl.ELEMENT_ARRAY_BUFFER,
+      new Uint16Array(indices),
+      gl.STATIC_DRAW
+    );
+
+    return {
+      position,
+      color: colorBuf,
+      indices: index,
+      vertexCount: indices.length,
+    };
+  }
+
+  // -----------------------------------------------------------
+  // Geometry: simple rectangular prism centered at origin -> GL buffers
+  function createRectPrismGeometry(gl, color, w, h, t) {
+    const hw = w * 0.5;
+    const hh = h * 0.5;
+    const hz = t * 0.5;
+    const positions = [
+      // front (z = +hz)
+      -hw, -hh, +hz,
+      +hw, -hh, +hz,
+      +hw, +hh, +hz,
+      -hw, +hh, +hz,
+      // back (z = -hz)
+      -hw, -hh, -hz,
+      +hw, -hh, -hz,
+      +hw, +hh, -hz,
+      -hw, +hh, -hz,
+    ];
+    const colors = [];
+    for (let i = 0; i < 8; i++) colors.push(...color);
+    const indices = [
+      // front
+      0, 1, 2, 0, 2, 3,
+      // back
+      5, 4, 7, 5, 7, 6,
+      // sides
+      0, 4, 1, 1, 4, 5, // bottom
+      1, 5, 2, 2, 5, 6, // right
+      2, 6, 3, 3, 6, 7, // top
+      3, 7, 0, 0, 7, 4, // left
+    ];
+
+    const position = gl.createBuffer();
+    gl.bindBuffer(gl.ARRAY_BUFFER, position);
+    gl.bufferData(
+      gl.ARRAY_BUFFER,
+      new Float32Array(positions),
+      gl.STATIC_DRAW
+    );
+
+    const colorBuf = gl.createBuffer();
+    gl.bindBuffer(gl.ARRAY_BUFFER, colorBuf);
+    gl.bufferData(
+      gl.ARRAY_BUFFER,
+      new Float32Array(colors),
+      gl.STATIC_DRAW
+    );
 
     const index = gl.createBuffer();
     gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, index);

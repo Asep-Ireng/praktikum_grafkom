@@ -32,7 +32,7 @@
 
   // -----------------------------------------------------------
   // Shape scales (ellipsoids) and base sizes
-  const UPPER_SCALE = [1.55, 1.2, 2.15]; // shoulder bulb
+  const UPPER_SCALE = [1.1, 1.2, 2.15]; // shoulder bulb
   const FOREARM_SCALE = [1.75, 1.55, 2.65]; // huge forearm
   const PALM_SCALE = [1.2, 0.7, 1.1]; // palm thickness in Y
 

@@ -1,16 +1,20 @@
 // mega_torso.js (modular, reusable, no canvas/shaders/render loop)
-// Mega Swampert — Torso (main body sphere, rump sphere, belly band, center fin,
-// fin bottom cap)
+// Mega Swampert — Torso (main body sphere, rump sphere, center fin, fin cap)
+// Two-tone body: top hemisphere blue, bottom hemisphere white
 //
-// Usage:
-//   const torso = MegaTorso.init(gl);
-//   ...
-//   MegaTorso.draw(gl, programInfo, torso, viewMatrix, { /* overrides */ });
+// Hyperboloid connector (internal):
+// - Private generator, created inside init, drawn in draw
+// - Top ellipse width auto-matches belly’s flat width
+// - Bottom ellipse width auto-matches rump’s flat width
+// - Pitch/Yaw/Roll controls for orientation
+// - Horizontal color split around the ring (same mapping top/bottom)
+// - Fat controls:
+//   • connector.fatXZ (draw-time X/Z fattener)
+//   • connector.geom.fat (geometry-time radii multiplier)
 //
 // Requires: glMatrix (mat4). Your shader must provide:
 //   attributes: aVertexPosition (vec3), aVertexColor (vec4)
-//   uniforms:   uModelViewMatrix (mat4) per draw,
-//               uProjectionMatrix (mat4) set by your app per frame.
+//   uniforms:   uModelViewMatrix (mat4), uProjectionMatrix (mat4)
 
 (function (global) {
   // -----------------------------------------------------------
@@ -20,117 +24,304 @@
   const COLOR_FIN_DARK = [0.16, 0.16, 0.2, 1.0];
 
   // -----------------------------------------------------------
-  // Default draw transforms (torso-local)
+  // Default draw transforms (torso-local, includes connector)
+  // Angles are in radians (pitch=X, yaw=Y, roll=Z).
   const DEFAULTS = {
     torso: {
-      scale: [2.8, 1.85, 3.6],
+      scale: [2.8, 2.45, 3.6],
       translate: [0.0, -0.02, 0.0],
     },
     rump: {
       translate: [0.0, -1.88, -4.95],
       scale: [1.55, 1.6, 2.35],
-      rotateX: 0.0, // optional
+      rotateX: -0.0,
     },
-    belly: {
-      scale: [2.82, 1.72, 3.55],
-      translate: [0.0, -0.22, 0.0],
+    connector: {
+      translate: [0.0, -1.1, -3.0],
+      pitch: 1.0, // rotateX
+      yaw: 0.0, // rotateY
+      roll: 0.0, // rotateZ
+      // Quick fat control at draw time (X/Z only)
+      fatXZ: 1.0,
+      scale: [1.3, 0.6, 0.8],
+      /*
+             translate: [0.0, -1.1, -3.0],
+      pitch: 1.0, // rotateX
+      yaw: 0.0, // rotateY
+      roll: 0.0, // rotateZ
+      // Back-compat: if rotateX is provided in overrides, it maps to pitch
+      scale: [1.3, 0.4, 0.8],
+      */
     },
     centerFin: {
-      translate: [0.0, -2.0, 0.05],
+      translate: [0.0, -3.6, -2.4],
       rotateX: -0.32,
-      scale: [1.35, 2.35, 2.35],
+      scale: [0.8, 3.35, 4.35],
     },
     finCap: {
-      translate: [0.0, -2.55, -3.95],
-      rotateX: 0.42,
-      scale: [1.3, 5.3, 5.3],
+      translate: [0.0, -1.0, -6.2],
+      rotateX: 0.32,
+      scale: [1.3, 5.2, 5.7],
     },
   };
 
   // Center fin curve parameters (geometry-time)
   const CENTER_FIN_PARAMS = {
-    samplesPerSegment: 22,
-    bandOffset: 0.2,
-    biasZ: 0.18,
-    tipPull: 0.62,
-    taperTip: 0.2,
+    samplesPerSegment: 32,
+    bandOffset: 0.24,
+    biasZ: 0.2,
+    tipPull: 0.22,
+    taperTip: 0.6,
     extrudeX: 0.22,
+    bulgeMid: 0.3,
+    bulgeCenter: 0.26,
+    bulgeWidth: 0.24,
     controlPts: [
-      [2.05, -6.5],
-      [2.25, -1.4],
-      [1.7, -0.1],
-      [1.8, 0.25],
-      [2.2, 0.85],
-      [1.35, 1.7],
-      [0.1, 2.05],
+      [1.45, -6.5],
+      [2.35, -1.4],
+      [1.55, -0.6],
+      [1.3, -0.2],
+      [1.3, 0.2],
+      [1.5, 0.45],
+      [0.85, 1.2],
+      [0.2, 1.27],
+      [1.1, 0.55],
     ],
   };
 
-  // Belly band lathe profile (geometry-time)
-  const BELLY_CONFIG = {
-    zStart: -1.6,
-    zEnd: 1.1,
-    zSegments: 48,
-    angStart: Math.PI * 0.95,
-    angEnd: Math.PI * 1.95,
-    angSegments: 96,
+ // Public: build GL buffers for torso parts (includes connector)
+// Public: build GL buffers for torso parts (includes connector)
+function init(gl, options) {
+  const flatTorso = {
+    chunk: 0.12,
+    rotX: 0,
+    rotY: 90,
+    rotZ: -20,
+    flip: true,
+    feather: 0.0,
+    ...(options?.connectFlat?.torso || {}),
+  };
+  const flatRump = {
+    chunk: 0.12,
+    rotX: 0,
+    rotY: 90,
+    rotZ: -20,
+    flip: false,
+    feather: 0.0,
+    ...(options?.connectFlat?.rump || {}),
   };
 
-  // -----------------------------------------------------------
-  // Public: build GL buffers for torso parts
-  function init(gl) {
-    // Torso main body (sphere arrays -> buffers)
-    const torsoSphere = createSphereGeometry(COLOR_BLUE, 48, 48, 1.0);
-    const torso = makeBufferSet(gl, torsoSphere);
+  const torsoSphere = createSphereGeometryTwoToneFlat(
+    COLOR_BLUE,
+    COLOR_BELLY,
+    48,
+    48,
+    1.0,
+    flatTorso
+  );
+  const torso = makeBufferSet(gl, torsoSphere);
 
-    // Rump sphere (hip bulge)
-    const rumpSphereArrays = createSphereGeometry(COLOR_BLUE, 36, 36, 1.0);
-    const rumpSphere = makeBufferSet(gl, rumpSphereArrays);
+  const rumpSphereArrays = createSphereGeometryTwoToneFlat(
+    COLOR_BLUE,
+    COLOR_BELLY,
+    36,
+    36,
+    1.0,
+    flatRump
+  );
+  const rumpSphere = makeBufferSet(gl, rumpSphereArrays);
 
-    // Belly band (lathe band, created directly as GL buffers)
-    const bellyBand = createLatheBandGeometry(
-      gl,
-      COLOR_BELLY,
-      BELLY_CONFIG.zStart,
-      BELLY_CONFIG.zEnd,
-      BELLY_CONFIG.zSegments,
-      BELLY_CONFIG.angStart,
-      BELLY_CONFIG.angEnd,
-      BELLY_CONFIG.angSegments,
-      (z) => {
-        const t =
-          (z - BELLY_CONFIG.zStart) /
-          (BELLY_CONFIG.zEnd - BELLY_CONFIG.zStart);
-        const bell = Math.sin(Math.PI * t);
-        const rx = 1.04 + 0.2 * bell;
-        const ry = 0.86 + 0.14 * bell;
-        return [rx, ry];
-      }
-    );
+  const centerFin = buildCenterFinFromParams(
+    gl,
+    COLOR_FIN_DARK,
+    CENTER_FIN_PARAMS
+  );
 
-    // Center fin (spline ribbon, created directly as GL buffers)
-    const centerFin = buildCenterFinFromParams(
-      gl,
-      COLOR_FIN_DARK,
-      CENTER_FIN_PARAMS
-    );
+  const finCap = createHalfDiskExtrudedX(
+    gl,
+    COLOR_FIN_DARK,
+    0.6,
+    0.22,
+    26,
+    options && options.finCapStretch
+  );
 
-    // Fin bottom cap (half-disk extruded)
-    const finCap = createHalfDiskExtrudedX(gl, COLOR_FIN_DARK, 0.6, 0.22, 28);
+  // Compute ellipse radii from the flat widths on belly and rump
+  // For a unit sphere, plane = 1 - 2*chunk; r_flat = sqrt(1 - plane^2)
+  const clamp01 = (x) => Math.max(0, Math.min(1, x ?? 0));
+  const planeFromChunk = (c) => 1 - 2 * clamp01(c);
+  const flatCircleRadius = (chunk) => {
+    const p = planeFromChunk(chunk);
+    return Math.sqrt(Math.max(0, 1 - p * p));
+  };
 
-    return {
-      torso,
-      rumpSphere,
-      bellyBand,
-      centerFin,
-      finCap,
-    };
+  const rFlatBelly = flatCircleRadius(flatTorso.chunk);
+  const rFlatRump = flatCircleRadius(flatRump.chunk);
+
+  // Convert to world-space ellipse radii using each part's Y/Z scales
+  const ryTopAuto = rFlatBelly * DEFAULTS.torso.scale[1];
+  const rzTopAuto = rFlatBelly * DEFAULTS.torso.scale[2];
+  const ryBotAuto = rFlatRump * DEFAULTS.rump.scale[1];
+  const rzBotAuto = rFlatRump * DEFAULTS.rump.scale[2];
+
+  // Build connector hyperboloid (internal, not exported)
+  const connectorGeom = {
+    height: 3.8,
+    // Auto-matched ellipse radii from the flats (can be overridden)
+    ryTop: ryTopAuto,
+    rzTop: rzTopAuto,
+    ryBot: ryBotAuto,
+    rzBot: rzBotAuto,
+    // Waist radii (narrowest point) — start equal to smaller end
+    waistRy: Math.min(ryTopAuto, ryBotAuto) * 1.5,
+    waistRz: Math.min(rzTopAuto, rzBotAuto) * 1.5,
+    // Tessellation
+    segAround: 64,
+    segHeight: 24,
+    // Coloring (angular seam softness fraction of π)
+    colorTop: COLOR_BLUE,
+    colorBottom: COLOR_BELLY,
+    blendBand: 0.08,
+    // allow explicit overrides via options.connector.geom
+    ...(options?.connector?.geom || {}),
+  };
+
+  // INTERNAL: Manual connector ring overrides — edit here in this file.
+  // Set enabled: true and fill any of the fields below to hard-override auto.
+  const INTERNAL_CONNECTOR_RINGS = {
+    enabled: true,
+    // Circular radii (same X/Z): numbers
+    topRadius: null,
+    bottomRadius: null,
+    // Elliptical radii [rx, rz]
+    topRadii: [1.9, 2.5], // e.g., [2.6, 3.9]
+    bottomRadii: [1.2, 1.9], // e.g., [1.7, 2.4]
+    // Multipliers applied after the values above (or auto)
+    topMul: 1,
+    bottomMul: 1,
+    // Optional: explicitly set waist (pinch). Leave null to auto-clamp.
+    waistRy: null,
+    waistRz: null,
+    // Optional: geometry-wide fat multiplier (applies to all radii)
+    fat: null,
+  };
+
+  // Helper to apply “manual radii” from an object that may look like:
+  // { topRadius, bottomRadius, topRadii:[rx,rz], bottomRadii:[rx,rz],
+  //   topMul, bottomMul, waistRy, waistRz, fat }
+  function applyRadiiFrom(src) {
+    if (!src) return;
+    const g = src.geom ?? src;
+
+    const hasNum = (v) => Number.isFinite(v);
+    const hasPair = (v) => Array.isArray(v) && v.length >= 2;
+
+    if (hasPair(g.topRadii)) {
+      connectorGeom.ryTop = +g.topRadii[0];
+      connectorGeom.rzTop = +g.topRadii[1];
+    } else if (hasNum(g.topRadius)) {
+      connectorGeom.ryTop = +g.topRadius;
+      connectorGeom.rzTop = +g.topRadius;
+    }
+
+    if (hasPair(g.bottomRadii)) {
+      connectorGeom.ryBot = +g.bottomRadii[0];
+      connectorGeom.rzBot = +g.bottomRadii[1];
+    } else if (hasNum(g.bottomRadius)) {
+      connectorGeom.ryBot = +g.bottomRadius;
+      connectorGeom.rzBot = +g.bottomRadius;
+    }
+
+    if (hasNum(g.topMul) && g.topMul !== 1) {
+      connectorGeom.ryTop *= g.topMul;
+      connectorGeom.rzTop *= g.topMul;
+    }
+    if (hasNum(g.bottomMul) && g.bottomMul !== 1) {
+      connectorGeom.ryBot *= g.bottomMul;
+      connectorGeom.rzBot *= g.bottomMul;
+    }
+
+    if (hasNum(g.waistRy)) connectorGeom.waistRy = +g.waistRy;
+    if (hasNum(g.waistRz)) connectorGeom.waistRz = +g.waistRz;
+
+    if (hasNum(g.fat) && g.fat !== 1) {
+      const f = +g.fat;
+      connectorGeom.ryTop *= f;
+      connectorGeom.rzTop *= f;
+      connectorGeom.ryBot *= f;
+      connectorGeom.rzBot *= f;
+      connectorGeom.waistRy *= f;
+      connectorGeom.waistRz *= f;
+    }
   }
 
+  // Apply overrides: first any options, then internal (internal wins)
+  applyRadiiFrom(options?.connector);
+  applyRadiiFrom(options?.connector?.geom);
+  if (INTERNAL_CONNECTOR_RINGS.enabled) applyRadiiFrom(INTERNAL_CONNECTOR_RINGS);
+
+  // If waist not explicitly set, clamp it to not exceed end radii
+  const waistExplicit =
+    (options?.connector?.geom &&
+      (Number.isFinite(options.connector.geom.waistRy) ||
+        Number.isFinite(options.connector.geom.waistRz))) ||
+    INTERNAL_CONNECTOR_RINGS.enabled &&
+      (Number.isFinite(INTERNAL_CONNECTOR_RINGS.waistRy) ||
+        Number.isFinite(INTERNAL_CONNECTOR_RINGS.waistRz));
+
+  if (!waistExplicit) {
+    connectorGeom.waistRy = Math.min(
+      connectorGeom.waistRy,
+      connectorGeom.ryTop,
+      connectorGeom.ryBot
+    );
+    connectorGeom.waistRz = Math.min(
+      connectorGeom.waistRz,
+      connectorGeom.rzTop,
+      connectorGeom.rzBot
+    );
+  }
+
+  const connector = createHyperboloidOneSheet(gl, connectorGeom);
+
+  return {
+    torso,
+    rumpSphere,
+    centerFin,
+    finCap,
+    connector,
+  };
+}
+
   // -----------------------------------------------------------
-  // Public: draw into provided viewMatrix
+  // Public: draw torso bits (hyperboloid is drawn via draw)
   function draw(gl, programInfo, buffers, viewMatrix, overrides) {
     const cfg = deepMerge(DEFAULTS, overrides || {});
+
+    // Back-compat: rotateX maps to pitch if present
+    if (
+      cfg.connector &&
+      cfg.connector.rotateX != null &&
+      cfg.connector.pitch == null
+    ) {
+      cfg.connector.pitch = cfg.connector.rotateX;
+    }
+
+    // Optional degrees support if provided
+    const deg2rad = (d) => (d * Math.PI) / 180;
+
+    const pitch =
+      (cfg.connector.pitchDeg != null
+        ? deg2rad(cfg.connector.pitchDeg)
+        : cfg.connector.pitch) || 0;
+    const yaw =
+      (cfg.connector.yawDeg != null
+        ? deg2rad(cfg.connector.yawDeg)
+        : cfg.connector.yaw) || 0;
+    const roll =
+      (cfg.connector.rollDeg != null
+        ? deg2rad(cfg.connector.rollDeg)
+        : cfg.connector.roll) || 0;
 
     function drawSet(set, m) {
       gl.bindBuffer(gl.ARRAY_BUFFER, set.position);
@@ -166,7 +357,6 @@
       gl.drawElements(gl.TRIANGLES, set.vertexCount, gl.UNSIGNED_SHORT, 0);
     }
 
-    // Torso (main blue body)
     {
       const m = mat4.clone(viewMatrix);
       mat4.scale(m, m, cfg.torso.scale);
@@ -174,7 +364,6 @@
       drawSet(buffers.torso, m);
     }
 
-    // Rump sphere (hip bulge)
     {
       const m = mat4.clone(viewMatrix);
       mat4.translate(m, m, cfg.rump.translate);
@@ -183,15 +372,19 @@
       drawSet(buffers.rumpSphere, m);
     }
 
-    // Belly band — fully under the blue torso (wide wrap)
-    {
+    // Connector hyperboloid with pitch-yaw-roll + fatXZ
+    if (buffers.connector) {
       const m = mat4.clone(viewMatrix);
-      mat4.scale(m, m, cfg.belly.scale);
-      mat4.translate(m, m, cfg.belly.translate);
-      drawSet(buffers.bellyBand, m);
+      mat4.translate(m, m, cfg.connector.translate);
+      if (pitch) mat4.rotate(m, m, pitch, [1, 0, 0]);
+      if (yaw) mat4.rotate(m, m, yaw, [0, 1, 0]);
+      if (roll) mat4.rotate(m, m, roll, [0, 0, 1]);
+      const fat = Math.max(0.001, cfg.connector.fatXZ ?? 1.0);
+      if (fat !== 1.0) mat4.scale(m, m, [fat, 1, fat]);
+      mat4.scale(m, m, cfg.connector.scale);
+      drawSet(buffers.connector, m);
     }
 
-    // Center fin
     {
       const m = mat4.clone(viewMatrix);
       mat4.translate(m, m, cfg.centerFin.translate);
@@ -200,7 +393,6 @@
       drawSet(buffers.centerFin, m);
     }
 
-    // Fin bottom cap (half-disk) at tail underside
     {
       const m = mat4.clone(viewMatrix);
       mat4.translate(m, m, cfg.finCap.translate);
@@ -211,12 +403,250 @@
   }
 
   // -----------------------------------------------------------
-  // Geometry helpers (arrays or GL buffers)
+  // Public: generic draw for any mesh built by this module
+  function drawMesh(gl, programInfo, bufferSet, modelViewMatrix) {
+    gl.bindBuffer(gl.ARRAY_BUFFER, bufferSet.position);
+    gl.vertexAttribPointer(
+      programInfo.attribLocations.vertexPosition,
+      3,
+      gl.FLOAT,
+      false,
+      0,
+      0
+    );
+    gl.enableVertexAttribArray(programInfo.attribLocations.vertexPosition);
 
-  function createSphereGeometry(color, latBands, lonBands, radius) {
+    gl.bindBuffer(gl.ARRAY_BUFFER, bufferSet.color);
+    gl.vertexAttribPointer(
+      programInfo.attribLocations.vertexColor,
+      4,
+      gl.FLOAT,
+      false,
+      0,
+      0
+    );
+    gl.enableVertexAttribArray(programInfo.attribLocations.vertexColor);
+
+    gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, bufferSet.indices);
+    gl.uniformMatrix4fv(
+      programInfo.uniformLocations.modelViewMatrix,
+      false,
+      modelViewMatrix
+    );
+    gl.drawElements(
+      gl.TRIANGLES,
+      bufferSet.vertexCount,
+      gl.UNSIGNED_SHORT,
+      0
+    );
+  }
+
+  // -----------------------------------------------------------
+  // Private: Hyperboloid generator (smooth, curved surface)
+  //
+  // Geometry is centered at origin, axis along Y. Apply transforms at draw.
+  function createHyperboloidOneSheet(gl, opts) {
+    const o = {
+      height: 2.0,
+      segAround: 48,
+      segHeight: 24,
+      // Ellipse radii for top and bottom (X/Z axes)
+      ryTop: 1.0,
+      rzTop: 1.0,
+      ryBot: 1.0,
+      rzBot: 1.0,
+      // Waist (narrowest) radii
+      waistRy: ((opts?.ryTop ?? 1.0) + (opts?.ryBot ?? 1.0)) * 0.5 * 0.5,
+      waistRz: ((opts?.rzTop ?? 1.0) + (opts?.rzBot ?? 1.0)) * 0.5 * 0.5,
+      // Coloring: blendBand as angular seam softness (0..0.49)
+      colorTop: COLOR_BLUE,
+      colorBottom: COLOR_BELLY,
+      blendBand: 0.08,
+      ...(opts || {}),
+    };
+
     const positions = [];
     const colors = [];
     const indices = [];
+
+    const halfHeight = o.height / 2;
+    const cols = o.segAround;
+    const rows = o.segHeight;
+
+    // Hyperboloid parameter solve (per axis)
+    const solveParams = (rTop, rBot, rWaist) => {
+      if (rWaist > rTop || rWaist > rBot) {
+        console.warn(
+          "Hyperboloid waist radius should be <= top/bottom radii."
+        );
+      }
+      const T_sq = rTop * rTop - rWaist * rWaist;
+      const B_sq = rBot * rBot - rWaist * rWaist;
+      if (T_sq < 0 || B_sq < 0) return { k: 0, y_waist: 0 };
+      const T = Math.sqrt(T_sq);
+      const B = Math.sqrt(B_sq);
+      const k = ((B + T) * (B + T)) / (o.height * o.height);
+      const y_waist = ((B - T) / (2 * (B + T))) * o.height;
+      return { k, y_waist };
+    };
+
+    const paramsX = solveParams(o.ryTop, o.ryBot, o.waistRy);
+    const paramsZ = solveParams(o.rzTop, o.rzBot, o.waistRz);
+
+    const getRadiusX = (y) =>
+      Math.sqrt(
+        o.waistRy * o.waistRy +
+          paramsX.k * (y - paramsX.y_waist) * (y - paramsX.y_waist)
+      );
+    const getRadiusZ = (y) =>
+      Math.sqrt(
+        o.waistRz * o.waistRz +
+          paramsZ.k * (y - paramsZ.y_waist) * (y - paramsZ.y_waist)
+      );
+
+    // Helpers
+    const mix1 = (a, b, t) => a * (1 - t) + b * t;
+    const smooth01 = (t) => t * t * (3 - 2 * t);
+    const clamp01 = (x) => Math.max(0, Math.min(1, x));
+
+    // Angular seam softness in radians (around theta = π)
+    const seamW = Math.max(0, Math.min(0.49, o.blendBand || 0)) * Math.PI;
+
+    // Vertices and colors
+    for (let j = 0; j <= rows; j++) {
+      const v = j / rows; // 0..1 bottom->top
+      const y = -halfHeight + v * o.height;
+
+      const rX = getRadiusX(y);
+      const rZ = getRadiusZ(y);
+
+      for (let i = 0; i <= cols; i++) {
+        const u = i / cols;
+        const theta = u * Math.PI * 2;
+
+        const x = rX * Math.cos(theta);
+        const z = rZ * Math.sin(theta);
+        positions.push(x, y, z);
+
+        // Horizontal split around ring with soft seam centered at π.
+        // half=0 => white, half=1 => blue (same mapping at all heights).
+        let half = theta < Math.PI ? 0 : 1;
+        if (seamW > 0) {
+          const tRaw = (theta - (Math.PI - seamW)) / (2 * seamW);
+          const t = clamp01(tRaw);
+          half =
+            theta <= Math.PI - seamW
+              ? 0
+              : theta >= Math.PI + seamW
+              ? 1
+              : smooth01(t);
+        }
+
+        const s = half;
+
+        colors.push(
+          mix1(o.colorBottom[0], o.colorTop[0], s),
+          mix1(o.colorBottom[1], o.colorTop[1], s),
+          mix1(o.colorBottom[2], o.colorTop[2], s),
+          mix1(o.colorBottom[3] ?? 1, o.colorTop[3] ?? 1, s)
+        );
+      }
+    }
+
+    // Indices
+    for (let j = 0; j < rows; j++) {
+      for (let i = 0; i < cols; i++) {
+        const a = (cols + 1) * j + i;
+        const b = a + cols + 1;
+        const c = b + 1;
+        const d = a + 1;
+        indices.push(a, b, d);
+        indices.push(b, c, d);
+      }
+    }
+
+    // Create GL buffers
+    return makeBufferSet(gl, {
+      positions,
+      colors,
+      indices,
+    });
+  }
+
+  // -----------------------------------------------------------
+  // Geometry helpers (arrays -> GL buffers)
+
+  // Two-tone sphere with “flat chunk” (with optional feather + rotation)
+  function createSphereGeometryTwoToneFlat(
+    colorTop,
+    colorBottom,
+    latBands,
+    lonBands,
+    radius,
+    flatOpt
+  ) {
+    const positions = [];
+    const colors = [];
+    const indices = [];
+
+    const hasChunk = flatOpt && Number.isFinite(flatOpt.chunk);
+    const rotX = ((flatOpt?.rotX || 0) * Math.PI) / 180;
+    const rotY = ((flatOpt?.rotY || 0) * Math.PI) / 180;
+    const rotZ = ((flatOpt?.rotZ || 0) * Math.PI) / 180;
+    const flip = !!flatOpt?.flip;
+    const feather = Math.max(0, flatOpt?.feather || 0);
+
+    const legacy =
+      flatOpt &&
+      (flatOpt.axis === "x" ||
+        flatOpt.axis === "y" ||
+        flatOpt.axis === "z") &&
+      Number.isFinite(flatOpt.cut);
+
+    function rotForward(x, y, z) {
+      const cx = Math.cos(rotX),
+        sx = Math.sin(rotX);
+      const cy = Math.cos(rotY),
+        sy = Math.sin(rotY);
+      const cz = Math.cos(rotZ),
+        sz = Math.sin(rotZ);
+      // Rx
+      let y1 = y * cx - z * sx;
+      let z1 = y * sx + z * cx;
+      let x1 = x;
+      // Ry
+      let x2 = x1 * cy + z1 * sy;
+      let z2 = -x1 * sy + z1 * cy;
+      let y2 = y1;
+      // Rz
+      let x3 = x2 * cz - y2 * sz;
+      let y3 = x2 * sz + y2 * cz;
+      let z3 = z2;
+      return [x3, y3, z3];
+    }
+    function rotInverse(x, y, z) {
+      const cx = Math.cos(-rotX),
+        sx = Math.sin(-rotX);
+      const cy = Math.cos(-rotY),
+        sy = Math.sin(-rotY);
+      const cz = Math.cos(-rotZ),
+        sz = Math.sin(-rotZ);
+      // Rz(-)
+      let x1 = x * cz - y * sz;
+      let y1 = x * sz + y * cz;
+      let z1 = z;
+      // Ry(-)
+      let x2 = x1 * cy + z1 * sy;
+      let z2 = -x1 * sy + z1 * cy;
+      let y2 = y1;
+      // Rx(-)
+      let y3 = y2 * cx - z2 * sx;
+      let z3 = y2 * sx + z2 * cx;
+      let x3 = x2;
+      return [x3, y3, z3];
+    }
+
+    const bandClamp = (x) => Math.max(0, Math.min(1, x));
 
     for (let lat = 0; lat <= latBands; lat++) {
       const theta = (lat * Math.PI) / latBands;
@@ -228,12 +658,53 @@
         const sinP = Math.sin(phi);
         const cosP = Math.cos(phi);
 
-        const x = radius * cosP * sinT;
-        const y = radius * cosT;
-        const z = radius * sinP * sinT;
+        let x = radius * cosP * sinT;
+        let y = radius * cosT;
+        let z = radius * sinP * sinT;
+
+        if (hasChunk) {
+          let [xr, yr, zr] = rotForward(x, y, z);
+          const c = bandClamp(flatOpt.chunk || 0);
+          let plane = 1 - 2 * c; // +1..-1
+          if (flip) plane = -plane;
+          plane *= radius;
+
+          const beyond =
+            (!flip && xr > plane) || (flip && xr < plane)
+              ? Math.abs(xr - plane)
+              : 0;
+
+          if (beyond > 0) {
+            if (feather <= 0) {
+              xr = plane;
+            } else {
+              const t = Math.min(1, beyond / feather);
+              xr = xr * (1 - t) + plane * t;
+            }
+          }
+          [x, y, z] = rotInverse(xr, yr, zr);
+        } else if (legacy) {
+          const axis = flatOpt.axis;
+          const cut = flatOpt.cut;
+          const v = axis === "x" ? x : axis === "y" ? y : z;
+          const beyond =
+            cut >= 0 && v > cut ? v - cut : cut < 0 && v < cut ? cut - v : 0;
+          let vClamped = v;
+          if (beyond > 0) {
+            if (feather <= 0) vClamped = cut;
+            else {
+              const t = Math.min(1, beyond / feather);
+              vClamped = v * (1 - t) + cut * t;
+            }
+          }
+          if (axis === "x") x = vClamped;
+          else if (axis === "y") y = vClamped;
+          else z = vClamped;
+        }
 
         positions.push(x, y, z);
-        colors.push(...color);
+        const ccol = y >= 0 ? colorTop : colorBottom;
+        colors.push(ccol[0], ccol[1], ccol[2], ccol[3]);
       }
     }
 
@@ -249,99 +720,35 @@
     return { positions, colors, indices };
   }
 
-  function createLatheBandGeometry(
-    gl,
-    color,
-    zStart,
-    zEnd,
-    zSegments,
-    angStart,
-    angEnd,
-    angSegments,
-    radiusFn
-  ) {
-    const positions = [];
-    const colors = [];
-    const indices = [];
-
-    const cols = angSegments + 1;
-
-    for (let i = 0; i <= zSegments; i++) {
-      const t = i / zSegments;
-      const z = zStart + (zEnd - zStart) * t;
-      const [rx, ry] = radiusFn(z);
-
-      for (let j = 0; j <= angSegments; j++) {
-        const u = j / angSegments;
-        const a = angStart + (angEnd - angStart) * u;
-        const x = rx * Math.cos(a);
-        const y = ry * Math.sin(a);
-        positions.push(x, y, z);
-        colors.push(...color);
-      }
-    }
-
-    for (let i = 0; i < zSegments; i++) {
-      for (let j = 0; j < angSegments; j++) {
-        const i0 = i * cols + j;
-        const i1 = i0 + 1;
-        const i2 = (i + 1) * cols + j;
-        const i3 = i2 + 1;
-        indices.push(i0, i2, i1);
-        indices.push(i1, i2, i3);
-      }
-    }
-
-    const position = gl.createBuffer();
-    gl.bindBuffer(gl.ARRAY_BUFFER, position);
-    gl.bufferData(
-      gl.ARRAY_BUFFER,
-      new Float32Array(positions),
-      gl.STATIC_DRAW
-    );
-
-    const colorBuf = gl.createBuffer();
-    gl.bindBuffer(gl.ARRAY_BUFFER, colorBuf);
-    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(colors), gl.STATIC_DRAW);
-
-    const index = gl.createBuffer();
-    gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, index);
-    gl.bufferData(
-      gl.ELEMENT_ARRAY_BUFFER,
-      new Uint16Array(indices),
-      gl.STATIC_DRAW
-    );
-
-    return {
-      position,
-      color: colorBuf,
-      indices: index,
-      vertexCount: indices.length,
-    };
-  }
-
-  function createExtrudedPolygonYZ(gl, color, points, thickness) {
+  function createExtrudedPolygonYZAxis(gl, color, points, thickness, axis) {
     const halfT = thickness * 0.5;
     const positions = [];
     const colors = [];
     const indices = [];
     const n = points.length;
 
+    // Front layer
     for (let i = 0; i < n; i++) {
       const [y, z] = points[i];
-      positions.push(+halfT, y, z);
+      if (axis === "x") positions.push(+halfT, y, z);
+      else positions.push(0.0, y, z + halfT);
       colors.push(...color);
     }
+    // Back layer
     for (let i = 0; i < n; i++) {
       const [y, z] = points[i];
-      positions.push(-halfT, y, z);
+      if (axis === "x") positions.push(-halfT, y, z);
+      else positions.push(0.0, y, z - halfT);
       colors.push(...color);
     }
 
+    // Front cap fan
     for (let i = 1; i < n - 1; i++) indices.push(0, i, i + 1);
+    // Back cap fan (reverse winding)
     const N = n;
     for (let i = 1; i < n - 1; i++) indices.push(N + 0, N + i + 1, N + i);
 
+    // Side walls
     for (let i = 0; i < n; i++) {
       const i0 = i;
       const i1 = (i + 1) % n;
@@ -377,6 +784,10 @@
       indices: index,
       vertexCount: indices.length,
     };
+  }
+
+  function createExtrudedPolygonYZ(gl, color, points, thickness) {
+    return createExtrudedPolygonYZAxis(gl, color, points, thickness, "x");
   }
 
   function createRibbonSolidX(gl, color, top, bottom, thicknessX) {
@@ -467,8 +878,25 @@
     };
   }
 
-  // Half-disk in YZ (flat at y=0, arc downward) extruded along X
-  function createHalfDiskExtrudedX(gl, color, radius, thicknessX, segments) {
+  // Half-disk in YZ extruded along X or Z.
+  function createHalfDiskExtrudedX(
+    gl,
+    color,
+    radius,
+    thickness,
+    segments,
+    opts
+  ) {
+    const o = {
+      edgeStretchZ: 1.0,
+      edgeStretchY: 1.0,
+      edgeStretchLeftZ: null,
+      edgeStretchRightZ: null,
+      edgeFalloff: 0.35,
+      extrudeAxis: "z",
+      ...(opts || {}),
+    };
+
     const poly = [];
     poly.push([0, radius]);
     for (let i = 1; i < segments; i++) {
@@ -478,7 +906,14 @@
       poly.push([y, z]);
     }
     poly.push([0, -radius]);
-    return createExtrudedPolygonYZ(gl, color, poly, thicknessX);
+
+    return createExtrudedPolygonYZAxis(
+      gl,
+      color,
+      poly,
+      thickness,
+      o.extrudeAxis === "z" ? "z" : "x"
+    );
   }
 
   // -----------------------------------------------------------
@@ -546,6 +981,14 @@
     const biasZ = cfg.biasZ ?? 0;
     const offset = cfg.offset ?? -0.28;
 
+    const bulgeA = Math.max(0, cfg.bulgeMid ?? 0);
+    const bulgeC = Math.min(1, Math.max(0, cfg.bulgeCenter ?? 0.5));
+    const bulgeW = Math.max(1e-3, cfg.bulgeWidth ?? 0.25);
+    const gauss = (u) => {
+      const d = (u - bulgeC) / bulgeW;
+      return Math.exp(-0.5 * d * d);
+    };
+
     for (let i = 0; i < n; i++) {
       const p0 = top[Math.max(0, i - 1)];
       const p1 = top[Math.min(n - 1, i + 1)];
@@ -558,8 +1001,11 @@
       const nrm = norm([-t[1], t[0]]);
       const taper = 1.0 - taperTip * smooth(0.65, 1.0, u);
 
-      let y = top[i][0] + nrm[0] * offset * taper;
-      let z = top[i][1] + nrm[1] * offset * taper;
+      const bulge = 1.0 + bulgeA * gauss(u);
+      const offU = offset * taper * bulge;
+
+      let y = top[i][0] + nrm[0] * offU;
+      let z = top[i][1] + nrm[1] * offU;
       z += biasZ;
 
       const w = smooth(0.65, 1.0, u);
@@ -578,6 +1024,9 @@
       biasZ: params.biasZ,
       tipPull: params.tipPull,
       taperTip: params.taperTip,
+      bulgeMid: params.bulgeMid,
+      bulgeCenter: params.bulgeCenter,
+      bulgeWidth: params.bulgeWidth,
     });
     return createRibbonSolidX(gl, color, top, bottom, params.extrudeX);
   }
@@ -646,6 +1095,7 @@
   global.MegaTorso = {
     init,
     draw,
+    drawMesh,
     defaults: DEFAULTS,
   };
 })(typeof window !== "undefined" ? window : this);
