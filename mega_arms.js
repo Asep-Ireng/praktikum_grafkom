@@ -1,535 +1,482 @@
-// mega_arms.js
-// Mega Swampert — Left & Right arms (full tuning version)
-// Upper arm (ellipsoid) + forearm (ellipsoid) + palm (hemisphere) + 3 fingers
-// + 3 orange pads on the forearm (center big, two small sides)
+// mega_arms.js (modular, reusable, GROUPED transforms, no canvas/shaders/loop)
+// Mega Swampert — Left & Right arms
+// Upper arm (ellipsoid) + forearm (ellipsoid) + palm (hemisphere)
+// + 3 fingers + 3 orange pads
 //
-// Pure WebGL. Requires glMatrix (mat4) and HTML shaders "shader-vs"/"shader-fs"
-// (aVertexPosition vec3, aVertexColor vec4, uProjectionMatrix, uModelViewMatrix).
+// Usage:
+//   const arms = MegaArms.init(gl);
+//   ...
+//   MegaArms.draw(gl, programInfo, arms, viewMatrix, {
+//     group: {
+//       translate: [0, 0, 0],
+//       rotate: { angle: 0, axis: [0, 1, 0] },
+//       scale: [1, 1, 1],
+//     },
+//     // any other per-part overrides can go here
+//   });
+//
+// Requires: glMatrix (mat4). Your shader must provide:
+//   attributes: aVertexPosition (vec3), aVertexColor (vec4)
+//   uniforms:   uModelViewMatrix (mat4) per draw,
+//               uProjectionMatrix (mat4) set by your app per frame.
 
-// -------------------------------------------------------------
-// COLOR PALETTE
-const ARM_BLUE = [0.18, 0.55, 0.95, 1.0];
-const FINGER_DARK = [0.10, 0.10, 0.12, 1.0];
-const PAD_ORANGE = [1.0, 0.60, 0.0, 1.0];
+(function (global) {
+  // -----------------------------------------------------------
+  // Color palette
+  //  const ARM_BLUE = [0.18, 0.55, 0.95, 1.0];
+  const ARM_BLUE = [0.58, 0.55, 0.95, 1.0];
+  const FINGER_DARK = [0.1, 0.1, 0.12, 1.0];
+  const PAD_ORANGE = [1.0, 0.6, 0.0, 1.0];
 
-// -------------------------------------------------------------
-// SHAPE SCALES (ellipsoids)
-const UPPER_SCALE = [1.55, 1.20, 2.15]; // shoulder bulb
-const FOREARM_SCALE = [1.75, 1.55, 2.65]; // huge forearm
-const PALM_SCALE = [1.20, 0.70, 1.10]; // palm thickness in Y
+  // -----------------------------------------------------------
+  // Shape scales (ellipsoids) and base sizes
+  const UPPER_SCALE = [1.55, 1.2, 2.15]; // shoulder bulb
+  const FOREARM_SCALE = [1.75, 1.55, 2.65]; // huge forearm
+  const PALM_SCALE = [1.2, 0.7, 1.1]; // palm thickness in Y
 
-// Fingers (base sphere radius then scaled)
-const FINGER_BASE_RADIUS = 0.68;
-const FINGER_SCALE = [1.25, 0.85, 1.68]; // x width, y height, z length
+  const FINGER_BASE_RADIUS = 0.68; // finger sphere before scaling
+  const FINGER_SCALE = [0.85, 0.85, 1.68]; // x width, y height, z length
 
-// -------------------------------------------------------------
-// POSE / PLACEMENT (edit these to tune everything)
+  // -----------------------------------------------------------
+  // Pose / placement (torso space). Left arm mirrors X via 'side'.
+  const SHOULDER_OFFSET = [5.55, 0.7, 1.72];
 
-// Shoulder to arm placement (torso space). Left arm mirrors X.
-const SHOULDER_OFFSET = [2.55, 0.70, 0.72];
+  // Upper arm orientation
+  const UPPER_PITCH_FWD = 0.15; // rotate around X (raise forward)
+  const UPPER_ROLL_OUT = -0.3; // rotate around Z (splay outward)
 
-// Upper arm orientation
-const UPPER_PITCH_FWD = 0.15; // rotate around X (raise forward)
-const UPPER_ROLL_OUT = 0.10;   // rotate around Z (splay outward)
+  // Forearm anchor relative to shoulder (in torso space)
+  const ELBOW_FROM_SHOULDER = [-0.1, -0.2, 2.22];
 
-// Forearm anchor relative to shoulder (in torso space)
-const ELBOW_FROM_SHOULDER = [-0.10, -0.2, 2.22];
+  // Forearm orientation
+  const FOREARM_PITCH_FWD = -0.12; // X (bend)
+  const FOREARM_ROLL_OUT = 0.12; // Z (splay)
+  const FOREARM_YAW_OUT = -0.12; // Y (toe-out). Multiplied by 'side'.
 
-// Forearm orientation (lower-arm)
-const FOREARM_PITCH_FWD = -0.12; // X (bend)
-const FOREARM_ROLL_OUT = 0.12;   // Z (splay)
-const FOREARM_YAW_OUT = -0.12;    // Y (toe-out). Multiplied by 'side'.
+  // Palm (wrist) placement/orientation relative to forearm center
+  const PALM_DROP = 1.05; // move down from forearm
+  const PALM_FORWARD = 0.53; // move forward from forearm
+  const PALM_PITCH = -0.12; // pitch palm downward
+  const WRIST_YAW = 0.12; // yaw palm (multiplied by 'side')
+  const WRIST_ROLL = 0.03; // roll palm (multiplied by 'side')
 
-// Palm (wrist) placement/orientation relative to forearm center
-const PALM_DROP = 1.05;   // move down from forearm
-const PALM_FORWARD = 0.53; // move forward from forearm
-const PALM_PITCH = -0.12;  // pitch palm downward
-const WRIST_YAW = 0.12;    // yaw palm (multiplied by 'side')
-const WRIST_ROLL = 0.03;   // roll palm (multiplied by 'side')
+  // Orange pads on forearm (forearm local frame)
+  const PAD_CENTER_OFF = [0.0, 1.42, 0.46];
+  const PAD_SIDE_X = 1.5; // +/- X
+  const PAD_SIDE_OFF = [1.0, 0.6, 0.22];
+  const PAD_TILT_X = 0.1; // slight wrap over forearm (rotate X)
+  const PAD_CENTER_SCALE = [0.8, 0.33, 1.2];
+  const PAD_SIDE_SCALE = [0.55, 0.48, 0.9];
 
-// Orange pads on forearm (forearm local frame)
-const PAD_CENTER_OFF = [0.00, 1.42, 0.46]; // center pad: lift (y) and forward (z)
-const PAD_SIDE_X = 1.50;                   // side pad lateral offset (+/- X)
-const PAD_SIDE_OFF = [1.00, 0.60, 0.22];   // side pad lift/forward
-const PAD_TILT_X = 0.1;                  // slight wrap over forearm (rotate X)
-const PAD_CENTER_SCALE = [0.80, 0.33, 1.20];
-const PAD_SIDE_SCALE = [0.55, 0.48, 0.90];
+  // Finger cluster base offsets (palm local)
+  const FINGER_FORWARD = 3.05;
+  const FINGER_DOWN = 0.6;
+  const FINGER_SPREAD_X = 1.8;
+  const FINGER_MID_OFFSET_X = 0.0;
+  const FINGER_ROW_Z_BIAS = -0.28;
 
-// Finger cluster base offsets (palm local)
-const FINGER_FORWARD = 1.55;
-const FINGER_DOWN = 1.60;
-const FINGER_SPREAD_X = 1.90;
-const FINGER_MID_OFFSET_X = 0.00;
-const FINGER_ROW_Z_BIAS = 0.08;
-
-// Rotate the whole finger cluster relative to palm
-const FINGER_CLUSTER_ROT = {
-  pitch: 0.60, // curl all down
-  yaw:   0.00,  // toe-out/in (multiplied by 'side')
-  roll:  0.00,  // fan (multiplied by 'side')
-};
-
-// Per-finger curl/spread (left, middle, right)
-const FINGER_ROT = [
-  { pitch: -0.26, yaw:  0.14, roll: 0.00 }, // left finger
-  { pitch: -0.32, yaw:  0.00, roll: 0.00 }, // middle (most curled)
-  { pitch: -0.26, yaw: -0.14, roll: 0.00 }, // right finger
-];
-
-// -------------------------------------------------------------
-// CAMERA
-let lastTime = 0;
-let cameraRotationX = 0;
-let cameraRotationY = 0;
-let cameraZoomZ = -9.0;
-let isDragging = false;
-let lastMouseX = 0;
-let lastMouseY = 0;
-
-// window.onload = function () {
-//   main();
-// };
-
-function main() {
-  const canvas = document.getElementById("glCanvas");
-  const gl = canvas.getContext("webgl");
-  if (!gl) {
-    console.error("WebGL not supported.");
-    return;
-  }
-
-  canvas.width = canvas.clientWidth;
-  canvas.height = canvas.clientHeight;
-  gl.viewport(0, 0, gl.canvas.width, gl.canvas.height);
-
-  const vsSource = document.getElementById("shader-vs").textContent;
-  const fsSource = document.getElementById("shader-fs").textContent;
-
-  const shaderProgram = initShaderProgram(gl, vsSource, fsSource);
-  if (!shaderProgram) return;
-
-  const programInfo = {
-    program: shaderProgram,
-    attribLocations: {
-      vertexPosition: gl.getAttribLocation(shaderProgram, "aVertexPosition"),
-      vertexColor: gl.getAttribLocation(shaderProgram, "aVertexColor"),
-    },
-    uniformLocations: {
-      projectionMatrix: gl.getUniformLocation(
-        shaderProgram,
-        "uProjectionMatrix"
-      ),
-      modelViewMatrix: gl.getUniformLocation(
-        shaderProgram,
-        "uModelViewMatrix"
-      ),
-    },
+  // Rotate the whole finger cluster relative to palm
+  const FINGER_CLUSTER_ROT = {
+    pitch: -0.4, // curl all down
+    yaw: 0.0, // toe-out/in (multiplied by 'side')
+    roll: 0.0, // fan (multiplied by 'side')
   };
 
-  const buffers = initArmBuffers(gl);
+  // Per-finger curl/spread (left, middle, right)
+  const FINGER_ROT = [
+    { pitch: -0.26, yaw: -0.04, roll: 0.0 }, // left
+    { pitch: -0.32, yaw: 0.0, roll: 0.0 }, // middle
+    { pitch: -0.26, yaw: 0.04, roll: 0.0 }, // right
+  ];
 
-  // Camera controls
-  canvas.addEventListener("mousedown", (e) => {
-    isDragging = true;
-    lastMouseX = e.clientX;
-    lastMouseY = e.clientY;
-  });
-  canvas.addEventListener("mouseup", () => (isDragging = false));
-  canvas.addEventListener("mouseleave", () => (isDragging = false));
-  canvas.addEventListener("mousemove", (e) => {
-    if (!isDragging) return;
-    const dx = e.clientX - lastMouseX;
-    const dy = e.clientY - lastMouseY;
-    cameraRotationY += dx * 0.005;
-    cameraRotationX += dy * 0.005;
-    cameraRotationX = Math.max(
-      -Math.PI / 2,
-      Math.min(Math.PI / 2, cameraRotationX)
-    );
-    lastMouseX = e.clientX;
-    lastMouseY = e.clientY;
-  });
-  canvas.addEventListener(
-    "wheel",
-    (e) => {
-      e.preventDefault();
-      cameraZoomZ += e.deltaY * 0.01;
-      cameraZoomZ = Math.max(-30.0, Math.min(-4.0, cameraZoomZ));
+  const DEFAULTS = {
+    // GROUP transform applied to the whole arm assembly (both sides)
+    group: {
+      translate: [0, 0, 0],
+      rotate: { angle: 1.0, axis: [1, 0, 0] },
+      scale: [1, 1, 1],
     },
-    { passive: false }
-  );
 
-  function render(now) {
-    now *= 0.001;
-    const dt = now - lastTime;
-    lastTime = now;
+    // placement
+    SHOULDER_OFFSET,
+    ELBOW_FROM_SHOULDER,
 
-    if (
-      canvas.width !== canvas.clientWidth ||
-      canvas.height !== canvas.clientHeight
-    ) {
-      canvas.width = canvas.clientWidth;
-      canvas.height = canvas.clientHeight;
-      gl.viewport(0, 0, gl.canvas.width, gl.canvas.height);
+    // orientations
+    UPPER_PITCH_FWD,
+    UPPER_ROLL_OUT,
+    UPPER_YAW_OUT: 0.0,  
+    FOREARM_PITCH_FWD,
+    FOREARM_ROLL_OUT,
+    FOREARM_YAW_OUT,
+
+    // palm/wrist
+    PALM_DROP,
+    PALM_FORWARD,
+    PALM_PITCH,
+    WRIST_YAW,
+    WRIST_ROLL,
+
+    // scales
+    UPPER_SCALE,
+    FOREARM_SCALE,
+    PALM_SCALE,
+    FINGER_SCALE,
+
+    // pads
+    PAD_CENTER_OFF,
+    PAD_SIDE_X,
+    PAD_SIDE_OFF,
+    PAD_TILT_X,
+    PAD_CENTER_SCALE,
+    PAD_SIDE_SCALE,
+
+    // fingers layout/rot
+    FINGER_FORWARD,
+    FINGER_DOWN,
+    FINGER_SPREAD_X,
+    FINGER_MID_OFFSET_X,
+    FINGER_ROW_Z_BIAS,
+    FINGER_CLUSTER_ROT,
+    FINGER_ROT,
+
+    // geometry base sizes
+    FINGER_BASE_RADIUS,
+
+    // whether to flip the palm hemisphere (we use upper hemi geometry)
+    flipUpperHemispherePalm: true,
+  };
+
+  // -----------------------------------------------------------
+  // Public: build GL buffers for arms
+  function init(gl) {
+    const lat = 36;
+    const lon = 36;
+
+    const upper = makeBufferSet(gl, createSphereArrays(ARM_BLUE, lat, lon, 1.0));
+    const forearm = makeBufferSet(
+      gl,
+      createSphereArrays(ARM_BLUE, lat, lon, 1.0)
+    );
+
+    // Palm: UPPER hemisphere (y >= 0), flipped at draw so dome faces down
+    const palm = makeBufferSet(
+      gl,
+      createHemisphereYArrays(ARM_BLUE, 0.75, lat, lon, false)
+    );
+
+    // Fingers: bigger base radius
+    const finger = makeBufferSet(
+      gl,
+      createSphereArrays(FINGER_DARK, 24, 24, DEFAULTS.FINGER_BASE_RADIUS)
+    );
+
+    // Orange pads
+    const padCenter = makeBufferSet(
+      gl,
+      createSphereArrays(PAD_ORANGE, 24, 24, 1.0)
+    );
+    const padSide = makeBufferSet(
+      gl,
+      createSphereArrays(PAD_ORANGE, 24, 24, 1.0)
+    );
+
+    return { upper, forearm, palm, finger, padCenter, padSide };
+  }
+
+  // -----------------------------------------------------------
+  // Public: draw both arms into provided view matrix (supports GROUP transform)
+  // Caller must bind program and set uProjectionMatrix before calling draw.
+  function draw(gl, programInfo, buffers, viewMatrix, overrides) {
+    const cfg = deepMerge(DEFAULTS, overrides || {});
+
+    // Build group/root matrix once
+    const root = mat4.clone(viewMatrix);
+    if (cfg.group && cfg.group.translate) {
+      mat4.translate(root, root, cfg.group.translate);
+    }
+    if (cfg.group && cfg.group.rotate && cfg.group.rotate.angle) {
+      mat4.rotate(root, root, cfg.group.rotate.angle, cfg.group.rotate.axis || [0, 1, 0]);
+    }
+    if (cfg.group && cfg.group.scale) {
+      mat4.scale(root, root, cfg.group.scale);
     }
 
-    drawScene(gl, programInfo, buffers, dt);
-    requestAnimationFrame(render);
-  }
-  requestAnimationFrame(render);
-}
+    function drawSet(set, m) {
+      gl.bindBuffer(gl.ARRAY_BUFFER, set.position);
+      gl.vertexAttribPointer(
+        programInfo.attribLocations.vertexPosition,
+        3,
+        gl.FLOAT,
+        false,
+        0,
+        0
+      );
+      gl.enableVertexAttribArray(
+        programInfo.attribLocations.vertexPosition
+      );
 
-// -------------------------------------------------------------
-// BUFFERS
-function initArmBuffers(gl) {
-  const lat = 36;
-  const lon = 36;
+      gl.bindBuffer(gl.ARRAY_BUFFER, set.color);
+      gl.vertexAttribPointer(
+        programInfo.attribLocations.vertexColor,
+        4,
+        gl.FLOAT,
+        false,
+        0,
+        0
+      );
+      gl.enableVertexAttribArray(programInfo.attribLocations.vertexColor);
 
-  const upper = makeBufferSet(gl, createSphereArrays(ARM_BLUE, lat, lon, 1.0));
-  const forearm = makeBufferSet(gl, createSphereArrays(ARM_BLUE, lat, lon, 1.0));
-
-  // Palm: UPPER hemisphere (y>=0) then flipped so dome faces down
-  const palm = makeBufferSet(
-    gl,
-    createHemisphereYArrays(ARM_BLUE, 0.75, lat, lon, false)
-  );
-
-  // Fingers: bigger base radius
-  const finger = makeBufferSet(
-    gl,
-    createSphereArrays(FINGER_DARK, 24, 24, FINGER_BASE_RADIUS)
-  );
-
-  // Orange pads
-  const padCenter = makeBufferSet(
-    gl,
-    createSphereArrays(PAD_ORANGE, 24, 24, 1.0)
-  );
-  const padSide = makeBufferSet(gl, createSphereArrays(PAD_ORANGE, 24, 24, 1.0));
-
-  return { upper, forearm, palm, finger, padCenter, padSide };
-}
-
-// -------------------------------------------------------------
-// DRAW
-function drawScene(gl, programInfo, buffers, dt) {
-  gl.clearColor(0.1, 0.1, 0.1, 1.0);
-  gl.clearDepth(1.0);
-  gl.enable(gl.DEPTH_TEST);
-  gl.depthFunc(gl.LEQUAL);
-  gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
-
-  const projectionMatrix = mat4.create();
-  mat4.perspective(
-    projectionMatrix,
-    (45 * Math.PI) / 180,
-    gl.canvas.clientWidth / gl.canvas.clientHeight,
-    0.1,
-    100.0
-  );
-
-  const view = mat4.create();
-  mat4.translate(view, view, [0, 0, cameraZoomZ]);
-  mat4.rotate(view, view, cameraRotationX, [1, 0, 0]);
-  mat4.rotate(view, view, cameraRotationY, [0, 1, 0]);
-
-  gl.useProgram(programInfo.program);
-  gl.uniformMatrix4fv(
-    programInfo.uniformLocations.projectionMatrix,
-    false,
-    projectionMatrix
-  );
-
-  function drawSet(set, m) {
-    gl.bindBuffer(gl.ARRAY_BUFFER, set.position);
-    gl.vertexAttribPointer(
-      programInfo.attribLocations.vertexPosition,
-      3,
-      gl.FLOAT,
-      false,
-      0,
-      0
-    );
-    gl.enableVertexAttribArray(programInfo.attribLocations.vertexPosition);
-
-    gl.bindBuffer(gl.ARRAY_BUFFER, set.color);
-    gl.vertexAttribPointer(
-      programInfo.attribLocations.vertexColor,
-      4,
-      gl.FLOAT,
-      false,
-      0,
-      0
-    );
-    gl.enableVertexAttribArray(programInfo.attribLocations.vertexColor);
-
-    gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, set.indices);
-    gl.uniformMatrix4fv(
-      programInfo.uniformLocations.modelViewMatrix,
-      false,
-      m
-    );
-    gl.drawElements(gl.TRIANGLES, set.vertexCount, gl.UNSIGNED_SHORT, 0);
-  }
-
-  drawArm(+1);
-  drawArm(-1);
+      gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, set.indices);
+      gl.uniformMatrix4fv(
+        programInfo.uniformLocations.modelViewMatrix,
+        false,
+        m
+      );
+      gl.drawElements(gl.TRIANGLES, set.vertexCount, gl.UNSIGNED_SHORT, 0);
+    }
 
   function drawArm(side) {
-    // Upper arm
-    const upM = mat4.clone(view);
-    const shoulder = [
-      SHOULDER_OFFSET[0] * side,
-      SHOULDER_OFFSET[2],
-      SHOULDER_OFFSET[2],
-    ];
-    mat4.translate(upM, upM, shoulder);
-    mat4.rotate(upM, upM, UPPER_PITCH_FWD, [1, 0, 0]);
-    mat4.rotate(upM, upM, side * UPPER_ROLL_OUT, [0, 0, 1]);
-    mat4.scale(upM, upM, UPPER_SCALE);
-    drawSet(buffers.upper, upM);
+  // 1) Shoulder frame: affects the whole arm chain
+  const shoulder = [
+    cfg.SHOULDER_OFFSET[0] * side,  
+    cfg.SHOULDER_OFFSET[1],
+    cfg.SHOULDER_OFFSET[2],
+  ];
+  const shoulderFrame = mat4.clone(root);
+  mat4.translate(shoulderFrame, shoulderFrame, shoulder);
 
-    // Forearm
-    const foreCenter = [
-      shoulder[0] + ELBOW_FROM_SHOULDER[0] * side,
-      shoulder[1] + ELBOW_FROM_SHOULDER[1],
-      shoulder[2] + ELBOW_FROM_SHOULDER[2],
-    ];
-    const faM = mat4.clone(view);
-    mat4.translate(faM, faM, foreCenter);
-    mat4.rotate(faM, faM, FOREARM_PITCH_FWD, [1, 0, 0]);
-    mat4.rotate(faM, faM, side * FOREARM_ROLL_OUT, [0, 0, 1]);
-    mat4.rotate(faM, faM, side * FOREARM_YAW_OUT, [0, 1, 0]); // extra yaw
-    mat4.scale(faM, faM, FOREARM_SCALE);
-    drawSet(buffers.forearm, faM);
+  // Order: yaw (sideways) -> pitch (raise) -> roll (splay)
+  mat4.rotate(shoulderFrame, shoulderFrame, side * cfg.UPPER_YAW_OUT, [0, 1, 0]);
+  mat4.rotate(shoulderFrame, shoulderFrame, cfg.UPPER_PITCH_FWD, [1, 0, 0]);
+  mat4.rotate(shoulderFrame, shoulderFrame, side * cfg.UPPER_ROLL_OUT, [0, 0, 1]);
 
-    // Palm (hemisphere): inherit lower-arm yaw via applying same rotations,
-    // then flip + wrist tuning (pitch/yaw/roll)
-    const palmM = mat4.clone(view);
-    mat4.translate(palmM, palmM, foreCenter);
-    mat4.rotate(palmM, palmM, FOREARM_PITCH_FWD, [1, 0, 0]);
-    mat4.rotate(palmM, palmM, side * FOREARM_ROLL_OUT, [0, 0, 1]);
-    mat4.rotate(palmM, palmM, side * FOREARM_YAW_OUT, [0, 1, 0]);
-    mat4.translate(palmM, palmM, [0, -PALM_DROP, PALM_FORWARD]);
-    mat4.rotate(palmM, palmM, Math.PI, [1, 0, 0]); // flip upper hemisphere
-    mat4.rotate(palmM, palmM, PALM_PITCH, [1, 0, 0]);
-    mat4.rotate(palmM, palmM, side * WRIST_YAW, [0, 1, 0]);
-    mat4.rotate(palmM, palmM, side * WRIST_ROLL, [0, 0, 1]);
-    mat4.scale(palmM, palmM, PALM_SCALE);
-    drawSet(buffers.palm, palmM);
+  // 2) Upper arm on the shoulder frame
+  const upM = mat4.clone(shoulderFrame);
+  mat4.scale(upM, upM, cfg.UPPER_SCALE);
+  drawSet(buffers.upper, upM);
 
-    // Orange pads — forearm-local (reuse forearm rotations)
-    // Center pad
-    const pcM = mat4.clone(view);
-    mat4.translate(pcM, pcM, foreCenter);
-    mat4.rotate(pcM, pcM, FOREARM_PITCH_FWD, [1, 0, 0]);
-    mat4.rotate(pcM, pcM, side * FOREARM_ROLL_OUT, [0, 0, 1]);
-    mat4.rotate(pcM, pcM, side * FOREARM_YAW_OUT, [0, 1, 0]);
-    mat4.translate(pcM, pcM, PAD_CENTER_OFF);
-    mat4.rotate(pcM, pcM, PAD_TILT_X, [1, 0, 0]);
-    mat4.scale(pcM, pcM, PAD_CENTER_SCALE);
-    drawSet(buffers.padCenter, pcM);
+  // 3) Forearm base = shoulder frame translated by local elbow offset
+  const faBase = mat4.clone(shoulderFrame);
+  mat4.translate(faBase, faBase, [
+    cfg.ELBOW_FROM_SHOULDER[0] * side,
+    cfg.ELBOW_FROM_SHOULDER[1],
+    cfg.ELBOW_FROM_SHOULDER[2],
+  ]);
 
-    // Side pads (mirror in X)
-    for (const sgn of [-1, +1]) {
-      const psM = mat4.clone(view);
-      mat4.translate(psM, psM, foreCenter);
-      mat4.rotate(psM, psM, FOREARM_PITCH_FWD, [1, 0, 0]);
-      mat4.rotate(psM, psM, side * FOREARM_ROLL_OUT, [0, 0, 1]);
-      mat4.rotate(psM, psM, side * FOREARM_YAW_OUT, [0, 1, 0]);
-      mat4.translate(psM, psM, [
-        PAD_SIDE_X * sgn,
-        PAD_SIDE_OFF[1],
-        PAD_SIDE_OFF[2],
-      ]);
-      mat4.rotate(psM, psM, PAD_TILT_X * 1.2, [1, 0, 0]);
-      mat4.scale(psM, psM, PAD_SIDE_SCALE);
-      drawSet(buffers.padSide, psM);
-    }
+  // 4) Forearm on that base (its own bend/splay/yaw)
+  const faM = mat4.clone(faBase);
+  mat4.rotate(faM, faM, cfg.FOREARM_PITCH_FWD, [1, 0, 0]);
+  mat4.rotate(faM, faM, side * cfg.FOREARM_ROLL_OUT, [0, 0, 1]);
+  mat4.rotate(faM, faM, side * cfg.FOREARM_YAW_OUT, [0, 1, 0]);
+  mat4.scale(faM, faM, cfg.FOREARM_SCALE);
+  drawSet(buffers.forearm, faM);
 
-    // Fingers: build under palm (use palm local), with cluster rotations then per-finger curl
-    const fingers = [
-      [-FINGER_SPREAD_X * 0.6, FINGER_DOWN, FINGER_FORWARD - 0.02], // left
-      [ FINGER_MID_OFFSET_X,   FINGER_DOWN, FINGER_FORWARD + FINGER_ROW_Z_BIAS], // mid
-      [ FINGER_SPREAD_X * 0.6, FINGER_DOWN, FINGER_FORWARD - 0.02], // right
-    ];
+  // 5) Palm inherits forearm frame
+  const palmM = mat4.clone(faBase);
+  mat4.rotate(palmM, palmM, cfg.FOREARM_PITCH_FWD, [1, 0, 0]);
+  mat4.rotate(palmM, palmM, side * cfg.FOREARM_ROLL_OUT, [0, 0, 1]);
+  mat4.rotate(palmM, palmM, side * cfg.FOREARM_YAW_OUT, [0, 1, 0]);
+  mat4.translate(palmM, palmM, [0, -cfg.PALM_DROP, cfg.PALM_FORWARD]);
+  if (cfg.flipUpperHemispherePalm) mat4.rotate(palmM, palmM, Math.PI, [1, 0, 0]);
+  mat4.rotate(palmM, palmM, cfg.PALM_PITCH, [1, 0, 0]);
+  mat4.rotate(palmM, palmM, side * cfg.WRIST_YAW, [0, 1, 0]);
+  mat4.rotate(palmM, palmM, side * cfg.WRIST_ROLL, [0, 0, 1]);
+  mat4.scale(palmM, palmM, cfg.PALM_SCALE);
+  drawSet(buffers.palm, palmM);
 
-    for (let i = 0; i < 3; i++) {
-      const fM = mat4.clone(view);
-      mat4.translate(fM, fM, foreCenter);
-      // inherit forearm orientation for the palm frame
-      mat4.rotate(fM, fM, FOREARM_PITCH_FWD, [1, 0, 0]);
-      mat4.rotate(fM, fM, side * FOREARM_ROLL_OUT, [0, 0, 1]);
-      mat4.rotate(fM, fM, side * FOREARM_YAW_OUT, [0, 1, 0]);
-      // move to palm plane
-      mat4.translate(fM, fM, [0, -PALM_DROP, 0]);
-      // cluster rotation (about palm)
-      mat4.rotate(fM, fM, FINGER_CLUSTER_ROT.pitch, [1, 0, 0]);
-      mat4.rotate(fM, fM, side * FINGER_CLUSTER_ROT.yaw, [0, 1, 0]);
-      mat4.rotate(fM, fM, side * FINGER_CLUSTER_ROT.roll, [0, 0, 1]);
-      // per-finger base offset (mirror X)
-      mat4.translate(fM, fM, [
-        fingers[i][0] * side,
-        fingers[i][1],
-        fingers[i][2],
-      ]);
-      // per-finger curl/spread
-      mat4.rotate(fM, fM, FINGER_ROT[i].pitch, [1, 0, 0]);
-      mat4.rotate(fM, fM, side * FINGER_ROT[i].yaw, [0, 1, 0]);
-      mat4.rotate(fM, fM, side * FINGER_ROT[i].roll, [0, 0, 1]);
-      // size
-      mat4.scale(fM, fM, FINGER_SCALE);
-      drawSet(buffers.finger, fM);
-    }
+  // 6) Pads use faBase too
+  const pcM = mat4.clone(faBase);
+  mat4.rotate(pcM, pcM, cfg.FOREARM_PITCH_FWD, [1, 0, 0]);
+  mat4.rotate(pcM, pcM, side * cfg.FOREARM_ROLL_OUT, [0, 0, 1]);
+  mat4.rotate(pcM, pcM, side * cfg.FOREARM_YAW_OUT, [0, 1, 0]);
+  mat4.translate(pcM, pcM, cfg.PAD_CENTER_OFF);
+  mat4.rotate(pcM, pcM, cfg.PAD_TILT_X, [1, 0, 0]);
+  mat4.scale(pcM, pcM, cfg.PAD_CENTER_SCALE);
+  drawSet(buffers.padCenter, pcM);
+
+  for (const sgn of [-1, +1]) {
+    const psM = mat4.clone(faBase);
+    mat4.rotate(psM, psM, cfg.FOREARM_PITCH_FWD, [1, 0, 0]);
+    mat4.rotate(psM, psM, side * cfg.FOREARM_ROLL_OUT, [0, 0, 1]);
+    mat4.rotate(psM, psM, side * cfg.FOREARM_YAW_OUT, [0, 1, 0]);
+    mat4.translate(psM, psM, [cfg.PAD_SIDE_X * sgn, cfg.PAD_SIDE_OFF[1], cfg.PAD_SIDE_OFF[2]]);
+    mat4.rotate(psM, psM, cfg.PAD_TILT_X * 1.2, [1, 0, 0]);
+    mat4.scale(psM, psM, cfg.PAD_SIDE_SCALE);
+    drawSet(buffers.padSide, psM);
+  }
+
+  // 7) Fingers: base from faBase
+  const fingersBase = [
+    [-cfg.FINGER_SPREAD_X * 0.6, cfg.FINGER_DOWN, cfg.FINGER_FORWARD - 0.02],
+    [cfg.FINGER_MID_OFFSET_X, cfg.FINGER_DOWN, cfg.FINGER_FORWARD + cfg.FINGER_ROW_Z_BIAS],
+    [cfg.FINGER_SPREAD_X * 0.6, cfg.FINGER_DOWN, cfg.FINGER_FORWARD - 0.02],
+  ];
+
+  for (let i = 0; i < 3; i++) {
+    const fM = mat4.clone(faBase);
+    mat4.rotate(fM, fM, cfg.FOREARM_PITCH_FWD, [1, 0, 0]);
+    mat4.rotate(fM, fM, side * cfg.FOREARM_ROLL_OUT, [0, 0, 1]);
+    mat4.rotate(fM, fM, side * cfg.FOREARM_YAW_OUT, [0, 1, 0]);
+    mat4.translate(fM, fM, [0, -cfg.PALM_DROP, 0]);
+    mat4.rotate(fM, fM, cfg.FINGER_CLUSTER_ROT.pitch, [1, 0, 0]);
+    mat4.rotate(fM, fM, side * cfg.FINGER_CLUSTER_ROT.yaw, [0, 1, 0]);
+    mat4.rotate(fM, fM, side * cfg.FINGER_CLUSTER_ROT.roll, [0, 0, 1]);
+    mat4.translate(fM, fM, [fingersBase[i][0] * side, fingersBase[i][1], fingersBase[i][2]]);
+    mat4.rotate(fM, fM, cfg.FINGER_ROT[i].pitch, [1, 0, 0]);
+    mat4.rotate(fM, fM, side * cfg.FINGER_ROT[i].yaw, [0, 1, 0]);
+    mat4.rotate(fM, fM, side * cfg.FINGER_ROT[i].roll, [0, 0, 1]);
+    mat4.scale(fM, fM, cfg.FINGER_SCALE);
+    drawSet(buffers.finger, fM);
   }
 }
 
-// -------------------------------------------------------------
-// GEOMETRY ARRAY GENERATORS
-
-function createSphereArrays(color, latBands, lonBands, radius) {
-  const positions = [];
-  const colors = [];
-  const indices = [];
-
-  for (let lat = 0; lat <= latBands; lat++) {
-    const theta = (lat * Math.PI) / latBands;
-    const sinT = Math.sin(theta);
-    const cosT = Math.cos(theta);
-
-    for (let lon = 0; lon <= lonBands; lon++) {
-      const phi = (lon * 2 * Math.PI) / lonBands;
-      const sinP = Math.sin(phi);
-      const cosP = Math.cos(phi);
-
-      const x = radius * cosP * sinT;
-      const y = radius * cosT;
-      const z = radius * sinP * sinT;
-
-      positions.push(x, y, z);
-      colors.push(...color);
-    }
+    drawArm(+1);
+    drawArm(-1);
   }
 
-  for (let lat = 0; lat < latBands; lat++) {
-    for (let lon = 0; lon < lonBands; lon++) {
-      const first = lat * (lonBands + 1) + lon;
-      const second = first + lonBands + 1;
-      indices.push(first, second, first + 1);
-      indices.push(second, second + 1, first + 1);
+  // -----------------------------------------------------------
+  // Geometry array generators (arrays only; buffer creation below)
+
+  function createSphereArrays(color, latBands, lonBands, radius) {
+    const positions = [];
+       const colors = [];
+    const indices = [];
+
+    for (let lat = 0; lat <= latBands; lat++) {
+      const theta = (lat * Math.PI) / latBands;
+      const sinT = Math.sin(theta);
+      const cosT = Math.cos(theta);
+
+      for (let lon = 0; lon <= lonBands; lon++) {
+        const phi = (lon * 2 * Math.PI) / lonBands;
+        const sinP = Math.sin(phi);
+        const cosP = Math.cos(phi);
+
+        const x = radius * cosP * sinT;
+        const y = radius * cosT;
+        const z = radius * sinP * sinT;
+
+        positions.push(x, y, z);
+        colors.push(...color);
+      }
     }
+
+    for (let lat = 0; lat < latBands; lat++) {
+      for (let lon = 0; lon < lonBands; lon++) {
+        const first = lat * (lonBands + 1) + lon;
+        const second = first + lonBands + 1;
+        indices.push(first, second, first + 1);
+        indices.push(second, second + 1, first + 1);
+      }
+    }
+
+    return { positions, colors, indices };
   }
 
-  return { positions, colors, indices };
-}
+  // Hemisphere along Y; if lower==true keep y<=0 (dome down), else y>=0 (dome up)
+  function createHemisphereYArrays(color, radius, latBands, lonBands, lower) {
+    const positions = [];
+    const colors = [];
+    const indices = [];
 
-// Hemisphere along Y; if lower==true keep y<=0 (dome down), else y>=0 (dome up)
-function createHemisphereYArrays(color, radius, latBands, lonBands, lower) {
-  const positions = [];
-  const colors = [];
-  const indices = [];
+    const startLat = lower ? Math.ceil(latBands / 2) : 0;
+    const endLat = lower ? latBands : Math.floor(latBands / 2);
 
-  const startLat = lower ? Math.ceil(latBands / 2) : 0;
-  const endLat = lower ? latBands : Math.floor(latBands / 2);
+    for (let lat = startLat; lat <= endLat; lat++) {
+      const theta = (lat * Math.PI) / latBands;
+      const sinT = Math.sin(theta);
+      const cosT = Math.cos(theta);
 
-  for (let lat = startLat; lat <= endLat; lat++) {
-    const theta = (lat * Math.PI) / latBands;
-    const sinT = Math.sin(theta);
-    const cosT = Math.cos(theta);
+      for (let lon = 0; lon <= lonBands; lon++) {
+        const phi = (lon * 2 * Math.PI) / lonBands;
+        const sinP = Math.sin(phi);
+        const cosP = Math.cos(phi);
 
-    for (let lon = 0; lon <= lonBands; lon++) {
-      const phi = (lon * 2 * Math.PI) / lonBands;
-      const sinP = Math.sin(phi);
-      const cosP = Math.cos(phi);
+        const x = radius * cosP * sinT;
+        const y = radius * cosT;
+        const z = radius * sinP * sinT;
 
-      const x = radius * cosP * sinT;
-      const y = radius * cosT;
-      const z = radius * sinP * sinT;
-
-      positions.push(x, y, z);
-      colors.push(...color);
+        positions.push(x, y, z);
+        colors.push(...color);
+      }
     }
+
+    const eff = endLat - startLat;
+    for (let lat = 0; lat < eff; lat++) {
+      for (let lon = 0; lon < lonBands; lon++) {
+        const first = lat * (lonBands + 1) + lon;
+        const second = first + lonBands + 1;
+        indices.push(first, second, first + 1);
+        indices.push(second, second + 1, first + 1);
+      }
+    }
+
+    return { positions, colors, indices };
   }
 
-  const eff = endLat - startLat;
-  for (let lat = 0; lat < eff; lat++) {
-    for (let lon = 0; lon < lonBands; lon++) {
-      const first = lat * (lonBands + 1) + lon;
-      const second = first + lonBands + 1;
-      indices.push(first, second, first + 1);
-      indices.push(second, second + 1, first + 1);
-    }
+  // -----------------------------------------------------------
+  // GL buffer wrapper
+
+  function makeBufferSet(gl, data) {
+    const position = gl.createBuffer();
+    gl.bindBuffer(gl.ARRAY_BUFFER, position);
+    gl.bufferData(
+      gl.ARRAY_BUFFER,
+      new Float32Array(data.positions),
+      gl.STATIC_DRAW
+    );
+
+    const color = gl.createBuffer();
+    gl.bindBuffer(gl.ARRAY_BUFFER, color);
+    gl.bufferData(
+      gl.ARRAY_BUFFER,
+      new Float32Array(data.colors),
+      gl.STATIC_DRAW
+    );
+
+    const indices = gl.createBuffer();
+    gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, indices);
+    gl.bufferData(
+      gl.ELEMENT_ARRAY_BUFFER,
+      new Uint16Array(data.indices),
+      gl.STATIC_DRAW
+    );
+
+    return {
+      position,
+      color,
+      indices,
+      vertexCount: data.indices.length,
+    };
   }
 
-  return { positions, colors, indices };
-}
+  // Utility: shallow-deep merge for nested config objects
+  function deepMerge(base, extra) {
+    if (extra == null || typeof extra !== "object") return base;
+    const out = Array.isArray(base) ? base.slice() : { ...base };
+    for (const k of Object.keys(extra)) {
+      const bv = base[k];
+      const ev = extra[k];
+      if (
+        ev &&
+        typeof ev === "object" &&
+        !Array.isArray(ev) &&
+        bv &&
+        typeof bv === "object" &&
+        !Array.isArray(bv)
+      ) {
+        out[k] = deepMerge(bv, ev);
+      } else {
+        out[k] = Array.isArray(ev) ? ev.slice() : ev;
+      }
+    }
+    return out;
+  }
 
-// -------------------------------------------------------------
-// GL WRAPPERS + SHADER HELPERS
-
-function makeBufferSet(gl, data) {
-  const position = gl.createBuffer();
-  gl.bindBuffer(gl.ARRAY_BUFFER, position);
-  gl.bufferData(
-    gl.ARRAY_BUFFER,
-    new Float32Array(data.positions),
-    gl.STATIC_DRAW
-  );
-
-  const color = gl.createBuffer();
-  gl.bindBuffer(gl.ARRAY_BUFFER, color);
-  gl.bufferData(
-    gl.ARRAY_BUFFER,
-    new Float32Array(data.colors),
-    gl.STATIC_DRAW
-  );
-
-  const indices = gl.createBuffer();
-  gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, indices);
-  gl.bufferData(
-    gl.ELEMENT_ARRAY_BUFFER,
-    new Uint16Array(data.indices),
-    gl.STATIC_DRAW
-  );
-
-  return {
-    position,
-    color,
-    indices,
-    vertexCount: data.indices.length,
+  // Public API
+  global.MegaArms = {
+    init,
+    draw,
+    defaults: DEFAULTS,
   };
-}
-
-function initShaderProgram(gl, vsSource, fsSource) {
-  const vertexShader = loadShader(gl, gl.VERTEX_SHADER, vsSource);
-  const fragmentShader = loadShader(gl, gl.FRAGMENT_SHADER, fsSource);
-
-  const shaderProgram = gl.createProgram();
-  gl.attachShader(shaderProgram, vertexShader);
-  gl.attachShader(shaderProgram, fragmentShader);
-  gl.linkProgram(shaderProgram);
-
-  if (!gl.getProgramParameter(shaderProgram, gl.LINK_STATUS)) {
-    console.error(
-      "Unable to initialize the shader program: " +
-        gl.getProgramInfoLog(shaderProgram)
-    );
-    return null;
-  }
-  return shaderProgram;
-}
-
-function loadShader(gl, type, source) {
-  const shader = gl.createShader(type);
-  gl.shaderSource(shader, source);
-  gl.compileShader(shader);
-  if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
-    console.error(
-      "An error occurred compiling the shaders: " +
-        gl.getShaderInfoLog(shader)
-    );
-    gl.deleteShader(shader);
-    return null;
-  }
-  return shader;
-}
+})(typeof window !== "undefined" ? window : this);
