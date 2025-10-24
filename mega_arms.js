@@ -12,7 +12,9 @@
 //       rotate: { angle: 0, axis: [0, 1, 0] },
 //       scale: [1, 1, 1],
 //     },
-//     // any other per-part overrides can go here
+//     // Overrides, e.g.:
+//     // FINGER_MID_OFFSET: [0.0, 0.1, -0.2],
+//     // FINGER_SIDE_OFFSET: [0.0, -0.05, 0.25],
 //   });
 //
 // Requires: glMatrix (mat4). Your shader must provide:
@@ -35,7 +37,7 @@
   const PALM_SCALE = [1.2, 0.7, 1.1]; // palm thickness in Y
 
   const FINGER_BASE_RADIUS = 0.68; // finger sphere before scaling
-  const FINGER_SCALE = [0.85, 0.85, 1.68]; // x width, y height, z length
+  const FINGER_SCALE = [0.70, 0.85, 1.48]; // x width, y height, z length
 
   // -----------------------------------------------------------
   // Pose / placement (torso space). Left arm mirrors X via 'side'.
@@ -70,14 +72,20 @@
 
   // Finger cluster base offsets (palm local)
   const FINGER_FORWARD = 3.05;
-  const FINGER_DOWN = 0.6;
+  const FINGER_DOWN = -0.2;
   const FINGER_SPREAD_X = 1.8;
   const FINGER_MID_OFFSET_X = 0.0;
   const FINGER_ROW_Z_BIAS = -0.28;
 
+  // Extra per-group finger offsets in palm-local space.
+  // Note: X offsets are mirrored by 'side' so that positive X is "outward"
+  // on the right arm and also "outward" on the left arm.
+  const FINGER_MID_OFFSET = [0.0, 0.0, 0.3]; // [dx, dy, dz] for the middle
+  const FINGER_SIDE_OFFSET = [0.0, 0.0, -0.5]; // [dx, dy, dz] for both sides
+
   // Rotate the whole finger cluster relative to palm
   const FINGER_CLUSTER_ROT = {
-    pitch: -0.4, // curl all down
+    pitch: -0.7, // curl all down
     yaw: 0.0, // toe-out/in (multiplied by 'side')
     roll: 0.0, // fan (multiplied by 'side')
   };
@@ -104,7 +112,7 @@
     // orientations
     UPPER_PITCH_FWD,
     UPPER_ROLL_OUT,
-    UPPER_YAW_OUT: 0.0,  
+    UPPER_YAW_OUT: 0.0,
     FOREARM_PITCH_FWD,
     FOREARM_ROLL_OUT,
     FOREARM_YAW_OUT,
@@ -136,6 +144,8 @@
     FINGER_SPREAD_X,
     FINGER_MID_OFFSET_X,
     FINGER_ROW_Z_BIAS,
+    FINGER_MID_OFFSET,
+    FINGER_SIDE_OFFSET,
     FINGER_CLUSTER_ROT,
     FINGER_ROT,
 
@@ -152,7 +162,10 @@
     const lat = 36;
     const lon = 36;
 
-    const upper = makeBufferSet(gl, createSphereArrays(ARM_BLUE, lat, lon, 1.0));
+    const upper = makeBufferSet(
+      gl,
+      createSphereArrays(ARM_BLUE, lat, lon, 1.0)
+    );
     const forearm = makeBufferSet(
       gl,
       createSphereArrays(ARM_BLUE, lat, lon, 1.0)
@@ -195,7 +208,12 @@
       mat4.translate(root, root, cfg.group.translate);
     }
     if (cfg.group && cfg.group.rotate && cfg.group.rotate.angle) {
-      mat4.rotate(root, root, cfg.group.rotate.angle, cfg.group.rotate.axis || [0, 1, 0]);
+      mat4.rotate(
+        root,
+        root,
+        cfg.group.rotate.angle,
+        cfg.group.rotate.axis || [0, 1, 0]
+      );
     }
     if (cfg.group && cfg.group.scale) {
       mat4.scale(root, root, cfg.group.scale);
@@ -224,7 +242,9 @@
         0,
         0
       );
-      gl.enableVertexAttribArray(programInfo.attribLocations.vertexColor);
+      gl.enableVertexAttribArray(
+        programInfo.attribLocations.vertexColor
+      );
 
       gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, set.indices);
       gl.uniformMatrix4fv(
@@ -232,103 +252,211 @@
         false,
         m
       );
-      gl.drawElements(gl.TRIANGLES, set.vertexCount, gl.UNSIGNED_SHORT, 0);
+      gl.drawElements(
+        gl.TRIANGLES,
+        set.vertexCount,
+        gl.UNSIGNED_SHORT,
+        0
+      );
     }
 
-  function drawArm(side) {
-  // 1) Shoulder frame: affects the whole arm chain
-  const shoulder = [
-    cfg.SHOULDER_OFFSET[0] * side,  
-    cfg.SHOULDER_OFFSET[1],
-    cfg.SHOULDER_OFFSET[2],
-  ];
-  const shoulderFrame = mat4.clone(root);
-  mat4.translate(shoulderFrame, shoulderFrame, shoulder);
+    function drawArm(side) {
+      // 1) Shoulder frame: affects the whole arm chain
+      const shoulder = [
+        cfg.SHOULDER_OFFSET[0] * side,
+        cfg.SHOULDER_OFFSET[1],
+        cfg.SHOULDER_OFFSET[2],
+      ];
+      const shoulderFrame = mat4.clone(root);
+      mat4.translate(shoulderFrame, shoulderFrame, shoulder);
 
-  // Order: yaw (sideways) -> pitch (raise) -> roll (splay)
-  mat4.rotate(shoulderFrame, shoulderFrame, side * cfg.UPPER_YAW_OUT, [0, 1, 0]);
-  mat4.rotate(shoulderFrame, shoulderFrame, cfg.UPPER_PITCH_FWD, [1, 0, 0]);
-  mat4.rotate(shoulderFrame, shoulderFrame, side * cfg.UPPER_ROLL_OUT, [0, 0, 1]);
+      // Order: yaw (sideways) -> pitch (raise) -> roll (splay)
+      mat4.rotate(
+        shoulderFrame,
+        shoulderFrame,
+        side * cfg.UPPER_YAW_OUT,
+        [0, 1, 0]
+      );
+      mat4.rotate(
+        shoulderFrame,
+        shoulderFrame,
+        cfg.UPPER_PITCH_FWD,
+        [1, 0, 0]
+      );
+      mat4.rotate(
+        shoulderFrame,
+        shoulderFrame,
+        side * cfg.UPPER_ROLL_OUT,
+        [0, 0, 1]
+      );
 
-  // 2) Upper arm on the shoulder frame
-  const upM = mat4.clone(shoulderFrame);
-  mat4.scale(upM, upM, cfg.UPPER_SCALE);
-  drawSet(buffers.upper, upM);
+      // 2) Upper arm on the shoulder frame
+      const upM = mat4.clone(shoulderFrame);
+      mat4.scale(upM, upM, cfg.UPPER_SCALE);
+      drawSet(buffers.upper, upM);
 
-  // 3) Forearm base = shoulder frame translated by local elbow offset
-  const faBase = mat4.clone(shoulderFrame);
-  mat4.translate(faBase, faBase, [
-    cfg.ELBOW_FROM_SHOULDER[0] * side,
-    cfg.ELBOW_FROM_SHOULDER[1],
-    cfg.ELBOW_FROM_SHOULDER[2],
-  ]);
+      // 3) Forearm base = shoulder frame translated by local elbow offset
+      const faBase = mat4.clone(shoulderFrame);
+      mat4.translate(faBase, faBase, [
+        cfg.ELBOW_FROM_SHOULDER[0] * side,
+        cfg.ELBOW_FROM_SHOULDER[1],
+        cfg.ELBOW_FROM_SHOULDER[2],
+      ]);
 
-  // 4) Forearm on that base (its own bend/splay/yaw)
-  const faM = mat4.clone(faBase);
-  mat4.rotate(faM, faM, cfg.FOREARM_PITCH_FWD, [1, 0, 0]);
-  mat4.rotate(faM, faM, side * cfg.FOREARM_ROLL_OUT, [0, 0, 1]);
-  mat4.rotate(faM, faM, side * cfg.FOREARM_YAW_OUT, [0, 1, 0]);
-  mat4.scale(faM, faM, cfg.FOREARM_SCALE);
-  drawSet(buffers.forearm, faM);
+      // 4) Forearm on that base (its own bend/splay/yaw)
+      const faM = mat4.clone(faBase);
+      mat4.rotate(faM, faM, cfg.FOREARM_PITCH_FWD, [1, 0, 0]);
+      mat4.rotate(
+        faM,
+        faM,
+        side * cfg.FOREARM_ROLL_OUT,
+        [0, 0, 1]
+      );
+      mat4.rotate(faM, faM, side * cfg.FOREARM_YAW_OUT, [0, 1, 0]);
+      mat4.scale(faM, faM, cfg.FOREARM_SCALE);
+      drawSet(buffers.forearm, faM);
 
-  // 5) Palm inherits forearm frame
-  const palmM = mat4.clone(faBase);
-  mat4.rotate(palmM, palmM, cfg.FOREARM_PITCH_FWD, [1, 0, 0]);
-  mat4.rotate(palmM, palmM, side * cfg.FOREARM_ROLL_OUT, [0, 0, 1]);
-  mat4.rotate(palmM, palmM, side * cfg.FOREARM_YAW_OUT, [0, 1, 0]);
-  mat4.translate(palmM, palmM, [0, -cfg.PALM_DROP, cfg.PALM_FORWARD]);
-  if (cfg.flipUpperHemispherePalm) mat4.rotate(palmM, palmM, Math.PI, [1, 0, 0]);
-  mat4.rotate(palmM, palmM, cfg.PALM_PITCH, [1, 0, 0]);
-  mat4.rotate(palmM, palmM, side * cfg.WRIST_YAW, [0, 1, 0]);
-  mat4.rotate(palmM, palmM, side * cfg.WRIST_ROLL, [0, 0, 1]);
-  mat4.scale(palmM, palmM, cfg.PALM_SCALE);
-  drawSet(buffers.palm, palmM);
+      // 5) Palm inherits forearm frame
+      const palmM = mat4.clone(faBase);
+      mat4.rotate(palmM, palmM, cfg.FOREARM_PITCH_FWD, [1, 0, 0]);
+      mat4.rotate(
+        palmM,
+        palmM,
+        side * cfg.FOREARM_ROLL_OUT,
+        [0, 0, 1]
+      );
+      mat4.rotate(
+        palmM,
+        palmM,
+        side * cfg.FOREARM_YAW_OUT,
+        [0, 1, 0]
+      );
+      mat4.translate(palmM, palmM, [0, -cfg.PALM_DROP, cfg.PALM_FORWARD]);
+      if (cfg.flipUpperHemispherePalm) {
+        mat4.rotate(palmM, palmM, Math.PI, [1, 0, 0]);
+      }
+      mat4.rotate(palmM, palmM, cfg.PALM_PITCH, [1, 0, 0]);
+      mat4.rotate(palmM, palmM, side * cfg.WRIST_YAW, [0, 1, 0]);
+      mat4.rotate(palmM, palmM, side * cfg.WRIST_ROLL, [0, 0, 1]);
+      mat4.scale(palmM, palmM, cfg.PALM_SCALE);
+      drawSet(buffers.palm, palmM);
 
-  // 6) Pads use faBase too
-  const pcM = mat4.clone(faBase);
-  mat4.rotate(pcM, pcM, cfg.FOREARM_PITCH_FWD, [1, 0, 0]);
-  mat4.rotate(pcM, pcM, side * cfg.FOREARM_ROLL_OUT, [0, 0, 1]);
-  mat4.rotate(pcM, pcM, side * cfg.FOREARM_YAW_OUT, [0, 1, 0]);
-  mat4.translate(pcM, pcM, cfg.PAD_CENTER_OFF);
-  mat4.rotate(pcM, pcM, cfg.PAD_TILT_X, [1, 0, 0]);
-  mat4.scale(pcM, pcM, cfg.PAD_CENTER_SCALE);
-  drawSet(buffers.padCenter, pcM);
+      // 6) Pads use faBase too
+      const pcM = mat4.clone(faBase);
+      mat4.rotate(pcM, pcM, cfg.FOREARM_PITCH_FWD, [1, 0, 0]);
+      mat4.rotate(pcM, pcM, side * cfg.FOREARM_ROLL_OUT, [0, 0, 1]);
+      mat4.rotate(pcM, pcM, side * cfg.FOREARM_YAW_OUT, [0, 1, 0]);
+      mat4.translate(pcM, pcM, cfg.PAD_CENTER_OFF);
+      mat4.rotate(pcM, pcM, cfg.PAD_TILT_X, [1, 0, 0]);
+      mat4.scale(pcM, pcM, cfg.PAD_CENTER_SCALE);
+      drawSet(buffers.padCenter, pcM);
 
-  for (const sgn of [-1, +1]) {
-    const psM = mat4.clone(faBase);
-    mat4.rotate(psM, psM, cfg.FOREARM_PITCH_FWD, [1, 0, 0]);
-    mat4.rotate(psM, psM, side * cfg.FOREARM_ROLL_OUT, [0, 0, 1]);
-    mat4.rotate(psM, psM, side * cfg.FOREARM_YAW_OUT, [0, 1, 0]);
-    mat4.translate(psM, psM, [cfg.PAD_SIDE_X * sgn, cfg.PAD_SIDE_OFF[1], cfg.PAD_SIDE_OFF[2]]);
-    mat4.rotate(psM, psM, cfg.PAD_TILT_X * 1.2, [1, 0, 0]);
-    mat4.scale(psM, psM, cfg.PAD_SIDE_SCALE);
-    drawSet(buffers.padSide, psM);
-  }
+      for (const sgn of [-1, +1]) {
+        const psM = mat4.clone(faBase);
+        mat4.rotate(psM, psM, cfg.FOREARM_PITCH_FWD, [1, 0, 0]);
+        mat4.rotate(
+          psM,
+          psM,
+          side * cfg.FOREARM_ROLL_OUT,
+          [0, 0, 1]
+        );
+        mat4.rotate(psM, psM, side * cfg.FOREARM_YAW_OUT, [0, 1, 0]);
+        mat4.translate(psM, psM, [
+          cfg.PAD_SIDE_X * sgn,
+          cfg.PAD_SIDE_OFF[1],
+          cfg.PAD_SIDE_OFF[2],
+        ]);
+        mat4.rotate(psM, psM, cfg.PAD_TILT_X * 1.2, [1, 0, 0]);
+        mat4.scale(psM, psM, cfg.PAD_SIDE_SCALE);
+        drawSet(buffers.padSide, psM);
+      }
 
-  // 7) Fingers: base from faBase
-  const fingersBase = [
-    [-cfg.FINGER_SPREAD_X * 0.6, cfg.FINGER_DOWN, cfg.FINGER_FORWARD - 0.02],
-    [cfg.FINGER_MID_OFFSET_X, cfg.FINGER_DOWN, cfg.FINGER_FORWARD + cfg.FINGER_ROW_Z_BIAS],
-    [cfg.FINGER_SPREAD_X * 0.6, cfg.FINGER_DOWN, cfg.FINGER_FORWARD - 0.02],
-  ];
+      // 7) Fingers: base from faBase
+      const fingersBase = [
+        [
+          -cfg.FINGER_SPREAD_X * 0.6,
+          cfg.FINGER_DOWN,
+          cfg.FINGER_FORWARD - 0.02,
+        ],
+        [
+          cfg.FINGER_MID_OFFSET_X,
+          cfg.FINGER_DOWN,
+          cfg.FINGER_FORWARD + cfg.FINGER_ROW_Z_BIAS,
+        ],
+        [
+          cfg.FINGER_SPREAD_X * 0.6,
+          cfg.FINGER_DOWN,
+          cfg.FINGER_FORWARD - 0.02,
+        ],
+      ];
 
-  for (let i = 0; i < 3; i++) {
-    const fM = mat4.clone(faBase);
-    mat4.rotate(fM, fM, cfg.FOREARM_PITCH_FWD, [1, 0, 0]);
-    mat4.rotate(fM, fM, side * cfg.FOREARM_ROLL_OUT, [0, 0, 1]);
-    mat4.rotate(fM, fM, side * cfg.FOREARM_YAW_OUT, [0, 1, 0]);
-    mat4.translate(fM, fM, [0, -cfg.PALM_DROP, 0]);
-    mat4.rotate(fM, fM, cfg.FINGER_CLUSTER_ROT.pitch, [1, 0, 0]);
-    mat4.rotate(fM, fM, side * cfg.FINGER_CLUSTER_ROT.yaw, [0, 1, 0]);
-    mat4.rotate(fM, fM, side * cfg.FINGER_CLUSTER_ROT.roll, [0, 0, 1]);
-    mat4.translate(fM, fM, [fingersBase[i][0] * side, fingersBase[i][1], fingersBase[i][2]]);
-    mat4.rotate(fM, fM, cfg.FINGER_ROT[i].pitch, [1, 0, 0]);
-    mat4.rotate(fM, fM, side * cfg.FINGER_ROT[i].yaw, [0, 1, 0]);
-    mat4.rotate(fM, fM, side * cfg.FINGER_ROT[i].roll, [0, 0, 1]);
-    mat4.scale(fM, fM, cfg.FINGER_SCALE);
-    drawSet(buffers.finger, fM);
-  }
-}
+      for (let i = 0; i < 3; i++) {
+        const fM = mat4.clone(faBase);
+        mat4.rotate(fM, fM, cfg.FOREARM_PITCH_FWD, [1, 0, 0]);
+        mat4.rotate(
+          fM,
+          fM,
+          side * cfg.FOREARM_ROLL_OUT,
+          [0, 0, 1]
+        );
+        mat4.rotate(fM, fM, side * cfg.FOREARM_YAW_OUT, [0, 1, 0]);
+        mat4.translate(fM, fM, [0, -cfg.PALM_DROP, 0]);
+
+        // Finger cluster rotation
+        mat4.rotate(
+          fM,
+          fM,
+          cfg.FINGER_CLUSTER_ROT.pitch,
+          [1, 0, 0]
+        );
+        mat4.rotate(
+          fM,
+          fM,
+          side * cfg.FINGER_CLUSTER_ROT.yaw,
+          [0, 1, 0]
+        );
+        mat4.rotate(
+          fM,
+          fM,
+          side * cfg.FINGER_CLUSTER_ROT.roll,
+          [0, 0, 1]
+        );
+
+        // Base finger anchor
+        let [bx, by, bz] = fingersBase[i];
+
+        // Apply extra per-group offsets (palm-local).
+        // Mirror X by 'side' so positive dx is "outward" on both arms.
+        const off =
+          i === 1 ? cfg.FINGER_MID_OFFSET : cfg.FINGER_SIDE_OFFSET;
+        const [dx, dy, dz] = off;
+
+        const fx = (bx + dx) * side;
+        const fy = by + dy;
+        const fz = bz + dz;
+
+        mat4.translate(fM, fM, [fx, fy, fz]);
+
+        // Per-finger rotations
+        mat4.rotate(fM, fM, cfg.FINGER_ROT[i].pitch, [1, 0, 0]);
+        mat4.rotate(
+          fM,
+          fM,
+          side * cfg.FINGER_ROT[i].yaw,
+          [0, 1, 0]
+        );
+        mat4.rotate(
+          fM,
+          fM,
+          side * cfg.FINGER_ROT[i].roll,
+          [0, 0, 1]
+        );
+
+        // Scale to finger shape and draw
+        mat4.scale(fM, fM, cfg.FINGER_SCALE);
+        drawSet(buffers.finger, fM);
+      }
+    }
 
     drawArm(+1);
     drawArm(-1);
@@ -339,7 +467,7 @@
 
   function createSphereArrays(color, latBands, lonBands, radius) {
     const positions = [];
-       const colors = [];
+    const colors = [];
     const indices = [];
 
     for (let lat = 0; lat <= latBands; lat++) {
@@ -374,7 +502,13 @@
   }
 
   // Hemisphere along Y; if lower==true keep y<=0 (dome down), else y>=0 (dome up)
-  function createHemisphereYArrays(color, radius, latBands, lonBands, lower) {
+  function createHemisphereYArrays(
+    color,
+    radius,
+    latBands,
+    lonBands,
+    lower
+  ) {
     const positions = [];
     const colors = [];
     const indices = [];
