@@ -1,6 +1,7 @@
 // mega_torso.js (modular, reusable, no canvas/shaders/render loop)
-// Mega Swampert — Torso (main body sphere, rump ellipsoid, center fin,
-// fin cap) + connector + side fins + shoulder pads.
+// Mega Swampert — Torso (main body sphere, rump ellipsoid, center fin
+// split into 3 sections: belly, connector, rump), fin cap + connector +
+// side fins + shoulder pads.
 //
 // Update (rump shaping):
 // - The rump's upper hemisphere is elongated toward the tail edge by a
@@ -53,23 +54,45 @@
     },
     connector: {
       translate: [0.0, -1.1, -3.0],
-      pitch: 1.0, // rotateX
-      yaw: 0.0, // rotateY
-      roll: 0.0, // rotateZ
-      // Quick fat control at draw time (X/Z only)
+      pitch: 1.0,
+      yaw: 0.0,
+      roll: 0.0,
       fatXZ: 1.0,
       scale: [1.3, 0.6, 0.8],
     },
+    // Base group transform for the entire center fin assembly
     centerFin: {
       translate: [0.0, -3.6, -2.4],
       rotateX: -0.32,
       scale: [0.8, 3.35, 4.35],
     },
+    // Per-section transforms (relative to centerFin group)
+    // Names per your request: belly, connector, rump
+    centerFinBelly: {
+      translate: [0, 0, 0],
+      pitch: 0,
+      yaw: 0,
+      roll: 0,
+      scale: [1, 1, 1],
+    },
+    centerFinConnector: {
+      translate: [0, 0, 0],
+      pitch: 0,
+      yaw: 0,
+      roll: 0,
+      scale: [1, 1, 1],
+    },
+    centerFinRump: {
+      translate: [0, 0, 0],
+      pitch: 0,
+      yaw: 0,
+      roll: 0,
+      scale: [1, 1, 1],
+    },
     finCap: {
       translate: [0.0, -0.2, -6.2],
       rotateX: 0.32,
       scale: [0.5, 5.8, 8.5],
-      // thickMul: 5.0
     },
 
     // Side fins (quarter blades). Left mirrors right by default.
@@ -78,8 +101,6 @@
       pitch: -2.8,
       yaw: -3.0,
       roll: -0.2,
-      // X = thickness (extrusion), Y/Z stretch the fin in YZ and will
-      // also make it "fatter" thanks to the banded profile below.
       scale: [1.5, 5.5, 10.2],
     },
     sideFinL: {
@@ -88,7 +109,7 @@
       yaw: 3.0,
       roll: 0.2,
       scale: [1.5, 5.5, 10.2],
-      mirrorRight: false, // extra X = -1 scale before its own scale
+      mirrorRight: false,
     },
 
     // Shoulder pads (orange ellipsoids)
@@ -120,12 +141,15 @@
     bulgeCenter: 0.26,
     bulgeWidth: 0.24,
     controlPts: [
+      // rump area
       [1.45, -2.5],
       [1.375, -1.45],
-      [1.30, -1.42],
-      [1.10, -0.8],
-      [1.10, -0.2],
+      [1.3, -1.42],
+      [1.1, -0.8],
+      // connector area
+      [1.1, -0.2],
       [1.3, 0.2],
+      // belly area
       [1.4, 0.45],
       [0.95, 1.1],
       [0.2, 1.23],
@@ -136,19 +160,12 @@
   // Rump elongation defaults (upper hemisphere -> tail)
   const RUMP_ELONGATE_DEFAULTS = {
     enabled: true,
-    // How far to pull the top-back area backward in rump-local units
     amountZ: 0.4,
-    // Start of influence along Y normalized to radius; 0 = equator
     startYN: -0.5,
-    // How much to require "being in the back" (z < 0). 0=no bias,
-    // 1=only back side gets pulled.
     backBias: 0.75,
-    // Subtle pinches to keep the crease crisp
     pinchY: 0.25,
     pinchX: 0.04,
-    // Extra lift along Y so the ridge hugs the tail root
     liftY: 0.5,
-    // Softness of the ramp
     smooth: 1.0,
   };
 
@@ -205,46 +222,46 @@
 
     const rumpSphere = makeBufferSet(gl, rumpSphereArrays);
 
-    const centerFin = buildCenterFinFromParams(
+    // Build center fin split into 3 sections: rump, connector, belly
+    const finSections = buildCenterFinSectionsFromParams(
       gl,
       COLOR_FIN_DARK,
       CENTER_FIN_PARAMS
     );
-        // Fin cap thickness control:
-    // - options.finCap.thickness: absolute thickness
-    // - options.finCap.thickMul: multiplier over default (0.32)
+    const centerFinRump = finSections.rump;
+    const centerFinConnector = finSections.connector;
+    const centerFinBelly = finSections.belly;
+
+    // Fin cap thickness control
     const finCapDefaultThickness = 0.32;
     const finCapThickness =
-      (options?.finCap?.thickness ??
-        (options?.finCap?.thickMul
-          ? finCapDefaultThickness * options.finCap.thickMul
-          : finCapDefaultThickness));
+      options?.finCap?.thickness ??
+      (options?.finCap?.thickMul
+        ? finCapDefaultThickness * options.finCap.thickMul
+        : finCapDefaultThickness);
 
     const finCap = createHalfDiskExtrudedX(
       gl,
       COLOR_FIN_DARK,
       0.6,
       finCapThickness,
-      26,{
-      extrudeAxis: "x"},
-      options && options.finCapStretch
+      26,
+      { extrudeAxis: "x" }
     );
 
     // Side fin: thick quarter blade (shared geometry for L/R)
     const sideFinQuarter = createQuarterDiskExtrudedX(
       gl,
       COLOR_FIN_DARK,
-      0.62, // outer radius in YZ
-      0.22, // extrusion along X (thickness)
-      42, // segments along the arc
+      0.62,
+      0.22,
+      42,
       {
-        // The band thickness is a fraction of the outer radius and can
-        // taper toward the tip; this makes Y/Z scaling produce a fatter fin.
         angleStartDeg: 0,
         angleEndDeg: 90,
-        bandFracBase: 0.42, // near the base
-        bandFracTip: 0.12, // at the outer tip
-        taperEase: 0.6, // 0..1, 0=linear, 1=smooth
+        bandFracBase: 0.42,
+        bandFracTip: 0.12,
+        taperEase: 0.6,
         extrudeAxis: "x",
       }
     );
@@ -261,7 +278,6 @@
     const shoulderPad = makeBufferSet(gl, shoulderPadArrays);
 
     // Compute ellipse radii from the flat widths on belly and rump
-    // For a unit sphere, plane = 1 - 2*chunk; r_flat = sqrt(1 - plane^2)
     const clamp01 = (x) => Math.max(0, Math.min(1, x ?? 0));
     const planeFromChunk = (c) => 1 - 2 * clamp01(c);
     const flatCircleRadius = (chunk) => {
@@ -385,11 +401,14 @@
     return {
       torso,
       rumpSphere,
-      centerFin,
+      // Center fin split pieces
+      centerFinRump,
+      centerFinConnector,
+      centerFinBelly,
       finCap,
       connector,
-      sideFinQuarter, // new
-      shoulderPad, // new
+      sideFinQuarter,
+      shoulderPad,
     };
   }
 
@@ -398,7 +417,7 @@
   function draw(gl, programInfo, buffers, viewMatrix, overrides) {
     const cfg = deepMerge(DEFAULTS, overrides || {});
 
-    // Back-compat: rotateX -> pitch
+    // Back-compat: rotateX -> pitch on nodes that support pitch/yaw/roll
     const mapRotateX = (node) => {
       if (node && node.rotateX != null && node.pitch == null) {
         node.pitch = node.rotateX;
@@ -409,6 +428,9 @@
     mapRotateX(cfg.sideFinL);
     mapRotateX(cfg.shoulderR);
     mapRotateX(cfg.shoulderL);
+    mapRotateX(cfg.centerFinBelly);
+    mapRotateX(cfg.centerFinConnector);
+    mapRotateX(cfg.centerFinRump);
 
     const deg2rad = (d) => (d * Math.PI) / 180;
     const angles = (node) => {
@@ -484,14 +506,30 @@
       drawSet(buffers.connector, m);
     }
 
-    // Center fin
-    {
+    // Center fin (3 pieces): rump, connector, belly
+    const drawFinPiece = (buf, pieceCfg) => {
+      if (!buf) return;
       const m = mat4.clone(viewMatrix);
+      // Base group transform (was the old single fin transform)
       mat4.translate(m, m, cfg.centerFin.translate);
-      mat4.rotate(m, m, cfg.centerFin.rotateX, [1, 0, 0]);
+      if (cfg.centerFin.rotateX)
+        mat4.rotate(m, m, cfg.centerFin.rotateX, [1, 0, 0]);
       mat4.scale(m, m, cfg.centerFin.scale);
-      drawSet(buffers.centerFin, m);
-    }
+      // Per-piece extra transform
+      if (pieceCfg) {
+        mat4.translate(m, m, pieceCfg.translate || [0, 0, 0]);
+        const a = angles(pieceCfg);
+        if (a.pitch) mat4.rotate(m, m, a.pitch, [1, 0, 0]);
+        if (a.yaw) mat4.rotate(m, m, a.yaw, [0, 1, 0]);
+        if (a.roll) mat4.rotate(m, m, a.roll, [0, 0, 1]);
+        if (pieceCfg.scale) mat4.scale(m, m, pieceCfg.scale);
+      }
+      drawSet(buf, m);
+    };
+
+    drawFinPiece(buffers.centerFinRump, cfg.centerFinRump);
+    drawFinPiece(buffers.centerFinConnector, cfg.centerFinConnector);
+    drawFinPiece(buffers.centerFinBelly, cfg.centerFinBelly);
 
     // Fin cap
     {
@@ -850,6 +888,7 @@
 
   function createExtrudedPolygonYZAxis(gl, color, points, thickness, axis) {
     const halfT = thickness * 0.5;
+    thePositions = [];
     const positions = [];
     const colors = [];
     const indices = [];
@@ -1045,9 +1084,6 @@
   }
 
   // True quarter-circle sector in the YZ plane, extruded along X (default).
-  // Polygon = outer arc (90°) + a single point at the origin, so the two
-  // radial edges are the implicit last->first and end->origin boundaries.
-  // Scaling Y/Z now makes the fin genuinely "fatter".
   function createQuarterDiskExtrudedX(
     gl,
     color,
@@ -1057,7 +1093,6 @@
     opts
   ) {
     const o = {
-      // 0..90 degrees yields the first quadrant in our YZ convention
       angleStartDeg: 0,
       angleEndDeg: 90,
       extrudeAxis: "x",
@@ -1075,21 +1110,16 @@
 
     const poly = [];
     const arcLen = a1 - a0;
-    const segs = Math.max(3, segments | 0); // keep it convex
+    const segs = Math.max(3, segments | 0);
 
-    // Outer 90° arc from a0 -> a1
     for (let i = 0; i <= segs; i++) {
       const u = i / segs;
       const th = a0 + arcLen * u;
-      // Note: our YZ convention matches the rest of this file:
-      // y = -R sin(th), z = R cos(th) (same as half-disk above)
       const y = -radius * Math.sin(th);
       const z = radius * Math.cos(th);
       poly.push([y, z]);
     }
 
-    // One center point closes the two radial edges:
-    //   endArc -> center -> startArc (implicit wrap)
     poly.push([0, 0]);
 
     return createExtrudedPolygonYZAxis(
@@ -1137,6 +1167,54 @@
     }
     out.push(pts[n - 1]);
     return out;
+
+    function dist(a, b) {
+      const dy = b[0] - a[0];
+      const dz = b[1] - a[1];
+      return Math.hypot(dy, dz);
+    }
+    function mix2(a, b, wa, wb) {
+      return [a[0] * wa + b[0] * wb, a[1] * wa + b[1] * wb];
+    }
+  }
+
+  // Segment-aware sampler: returns points and per-segment start indices
+  function sampleCRSplineSegmented(pts, samplesPerSegment) {
+    const n = pts.length;
+    if (n < 2)
+      return { points: pts.slice(), segStarts: [0], segments: 0, sps: 0 };
+    const points = [];
+    const segStarts = [];
+    const alpha = 0.5;
+    const clamp = (i) => Math.max(0, Math.min(n - 1, i));
+
+    for (let i = 0; i < n - 1; i++) {
+      const p0 = pts[clamp(i - 1)];
+      const p1 = pts[i];
+      const p2 = pts[i + 1];
+      const p3 = pts[clamp(i + 2)];
+
+      const t0 = 0;
+      const t1 = t0 + Math.pow(dist(p0, p1), alpha);
+      const t2 = t1 + Math.pow(dist(p1, p2), alpha);
+      const t3 = t2 + Math.pow(dist(p2, p3), alpha);
+
+      segStarts[i] = points.length;
+      for (let s = 0; s < samplesPerSegment; s++) {
+        const t = t1 + ((t2 - t1) * s) / samplesPerSegment;
+        const A1 = mix2(p0, p1, (t1 - t) / (t1 - t0), (t - t0) / (t1 - t0));
+        const A2 = mix2(p1, p2, (t2 - t) / (t2 - t1), (t - t1) / (t2 - t1));
+        const A3 = mix2(p2, p3, (t3 - t) / (t3 - t2), (t - t2) / (t3 - t2));
+
+        const B1 = mix2(A1, A2, (t2 - t) / (t2 - t0), (t - t0) / (t2 - t0));
+        const B2 = mix2(A2, A3, (t3 - t) / (t3 - t1), (t - t1) / (t3 - t1));
+
+        const C = mix2(B1, B2, (t2 - t) / (t2 - t1), (t - t1) / (t2 - t1));
+        points.push(C);
+      }
+    }
+    points.push(pts[n - 1]);
+    return { points, segStarts, segments: n - 1, sps: samplesPerSegment };
 
     function dist(a, b) {
       const dy = b[0] - a[0];
@@ -1202,6 +1280,7 @@
     return out;
   }
 
+  // Legacy single ribbon builder (kept for reference)
   function buildCenterFinFromParams(gl, color, params) {
     const top = sampleCRSpline(params.controlPts, params.samplesPerSegment);
     const bottom = makeBiasedBottomCurve(top, {
@@ -1216,10 +1295,74 @@
     return createRibbonSolidX(gl, color, top, bottom, params.extrudeX);
   }
 
+  // Build 3 ribbon sections: rump, connector, belly
+  // Critical: compute the biased bottom ONCE along the full fin, then slice.
+  // This preserves the original continuous shaping (taper/bulge/tip pull).
+  // Segment ranges (by control points):
+  // - rump:      segments 0..3   (CP0..CP4)
+  // - connector: segment  4      (CP4..CP5)
+  // - belly:     segments 5..8   (CP5..CP9)
+  function buildCenterFinSectionsFromParams(gl, color, params) {
+    // Full top and bottom along the entire fin
+    const topAll = sampleCRSpline(params.controlPts, params.samplesPerSegment);
+    const bottomAll = makeBiasedBottomCurve(topAll, {
+      offset: -params.bandOffset,
+      biasZ: params.biasZ,
+      tipPull: params.tipPull,
+      taperTip: params.taperTip,
+      bulgeMid: params.bulgeMid,
+      bulgeCenter: params.bulgeCenter,
+      bulgeWidth: params.bulgeWidth,
+    });
+
+    // Segment start indices to cut at control-point boundaries
+    const seg = sampleCRSplineSegmented(
+      params.controlPts,
+      params.samplesPerSegment
+    );
+    const S = seg.segStarts;
+
+    const s4 = S[4] ?? topAll.length - 1; // boundary CP4|CP5
+    const s5 = S[5] ?? topAll.length - 1; // boundary CP5|CP6
+
+    // Slice consistently from both top and bottom
+    const topRump = topAll.slice(0, s4 + 1);
+    const botRump = bottomAll.slice(0, s4 + 1);
+
+    const topConnector = topAll.slice(s4, s5 + 1);
+    const botConnector = bottomAll.slice(s4, s5 + 1);
+
+    const topBelly = topAll.slice(s5);
+    const botBelly = bottomAll.slice(s5);
+
+    const rump = createRibbonSolidX(
+      gl,
+      color,
+      topRump,
+      botRump,
+      params.extrudeX
+    );
+    const connector = createRibbonSolidX(
+      gl,
+      color,
+      topConnector,
+      botConnector,
+      params.extrudeX
+    );
+    const belly = createRibbonSolidX(
+      gl,
+      color,
+      topBelly,
+      botBelly,
+      params.extrudeX
+    );
+
+    return { rump, connector, belly };
+  }
+
   // -----------------------------------------------------------
   // Rump deformation: pull upper hemisphere backward toward tail edge
   function deformRumpUpperTowardTail(positions, cfg) {
-    // Sphere was built with radius=1.0 centered at origin.
     const clamp01 = (x) => Math.max(0, Math.min(1, x));
     const smooth01 = (t) => t * t * (3 - 2 * t);
 
@@ -1236,25 +1379,21 @@
       let y = positions[i + 1];
       let z = positions[i + 2];
 
-      const yN = y; // radius = 1
+      const yN = y;
       const zN = z;
 
-      // Upper hemisphere ramp
-      let wY = clamp01((yN - startYN) / (1 - startYN));
+      let wY = Math.max(0, Math.min(1, (yN - startYN) / (1 - startYN)));
       if (useSmooth > 0) wY = smooth01(wY);
 
-      // Prefer back side (z < 0) so silhouette flows into tail
-      let wBack = clamp01(-zN); // 0 near front, 1 deep in back
+      let wBack = Math.max(0, Math.min(1, -zN));
       if (useSmooth > 0) wBack = smooth01(wBack);
 
       const bias = (1 - backBias) + backBias * wBack;
       const w = wY * bias;
       if (w <= 1e-6) continue;
 
-      // Pull back along -Z
       z -= amountZ * w;
 
-      // Subtle pinch to keep the ridge tight
       x *= 1 - pinchX * w;
       y = y * (1 - pinchY * w) + liftY * w;
 
