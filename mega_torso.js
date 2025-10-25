@@ -182,7 +182,7 @@
       ...(options?.connectFlat?.torso || {}),
     };
     const flatRump = {
-      chunk: 0.12,
+      chunk: 0.16,
       rotX: 0,
       rotY: 90,
       rotZ: -20,

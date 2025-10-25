@@ -18,8 +18,8 @@
   const DEFAULTS = {
     group: {
       translate: [0, -3, -5],
-      rotate: { angle: 0.0, axis: [0, 1, 0] },
-      scale: [1.0, 1.0, 1.0],
+      rotate: { angle: 0.07, axis: [1, 0, 0] },
+      scale: [1.0, 1.2, 1.0],
     },
 
     HIP_OFFSET,
@@ -41,7 +41,7 @@
     FOOT_LOCAL_MIRROR_X: true,
 
     // Extra per-foot Euler rotations (applied after base pitch/yaw-out)
-    FOOT_EXTRA_PITCH: 0.0, // radians around X
+    FOOT_EXTRA_PITCH: -0.0, // radians around X
     FOOT_EXTRA_YAW: 0.0, // radians around Y
     FOOT_ROLL: 0.0, // radians around Z
 
