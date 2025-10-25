@@ -2,7 +2,7 @@
 <html>
   <head>
     <meta charset="utf-8" />
-    <title>Mega Swampert — Unified Scene (Modular)</title>
+    <title>Mega Swampert — Scene</title>
     <style>
       html,
       body {
@@ -17,212 +17,38 @@
         height: 100vh;
       }
     </style>
-
-    <script id="shader-vs" type="x-shader/x-vertex">
-      attribute vec4 aVertexPosition;
-      attribute vec4 aVertexColor;
-
-      uniform mat4 uModelViewMatrix;
-      uniform mat4 uProjectionMatrix;
-
-      varying lowp vec4 vColor;
-
-      void main(void) {
-        gl_Position = uProjectionMatrix * uModelViewMatrix * aVertexPosition;
-        vColor = aVertexColor;
-      }
-    </script>
-
-    <script id="shader-fs" type="x-shader/x-fragment">
-      varying lowp vec4 vColor;
-      void main(void) {
-        gl_FragColor = vColor;
-      }
-    </script>
   </head>
   <body>
     <canvas id="glCanvas"></canvas>
 
+    <!-- Dependencies: gl-matrix (UMD) and your modular parts -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/gl-matrix/2.8.1/gl-matrix-min.js"></script>
-
-    <!-- Use the modular files we built -->
     <script src="mega_torso.js"></script>
     <script src="mega_legs.js"></script>
     <script src="mega_arms.js"></script>
     <script src="mega_head.js"></script>
 
-    <script>
-      // Camera
-      let lastTime = 0;
-      let cameraRotationX = 0;
-      let cameraRotationY = 0;
-      let cameraZoomZ = -9.0;
-      let isDragging = false;
-      let lastMouseX = 0;
-      let lastMouseY = 0;
+    <!-- Import the module and start rendering -->
+    <script type="module">
+      import {
+        renderMegaSwampert,
+        // or: createMegaSwampert
+      } from "./mega_swampert_scene.js";
 
-      function createProgram(gl, vsSource, fsSource) {
-        const vs = gl.createShader(gl.VERTEX_SHADER);
-        gl.shaderSource(vs, vsSource);
-        gl.compileShader(vs);
-        if (!gl.getShaderParameter(vs, gl.COMPLETE_STATUS) &&
-            !gl.getShaderParameter(vs, gl.COMPILE_STATUS)) {
-          console.error("VS compile error:", gl.getShaderInfoLog(vs));
-          gl.deleteShader(vs);
-          return null;
-        }
-        const fs = gl.createShader(gl.FRAGMENT_SHADER);
-        gl.shaderSource(fs, fsSource);
-        gl.compileShader(fs);
-        if (!gl.getShaderParameter(fs, gl.COMPILE_STATUS)) {
-          console.error("FS compile error:", gl.getShaderInfoLog(fs));
-          gl.deleteShader(fs);
-          gl.deleteShader(vs);
-          return null;
-        }
-        const prog = gl.createProgram();
-        gl.attachShader(prog, vs);
-        gl.attachShader(prog, fs);
-        gl.linkProgram(prog);
-        if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) {
-          console.error("Program link error:", gl.getProgramInfoLog(prog));
-          gl.deleteProgram(prog);
-          return null;
-        }
-        return prog;
-      }
+      // Easiest: start the loop immediately
+      const controller = renderMegaSwampert("glCanvas", {
+        attachControls: true,
+        autoResize: true,
+        initialZoomZ: -9.0,
+      });
 
-      (function main() {
-        const canvas = document.getElementById("glCanvas");
-        const gl = canvas.getContext("webgl");
-        if (!gl) {
-          console.error("WebGL not supported");
-          return;
-        }
+      // Example: adjust camera later
+      // controller.setCamera({ rotX: 0.2, rotY: 0.6, zoomZ: -10 });
 
-        function resize() {
-          const w = canvas.clientWidth;
-          const h = canvas.clientHeight;
-          if (canvas.width !== w || canvas.height !== h) {
-            canvas.width = w;
-            canvas.height = h;
-            gl.viewport(0, 0, w, h);
-          }
-        }
-        resize();
-
-        const vsSource = document.getElementById("shader-vs").textContent;
-        const fsSource = document.getElementById("shader-fs").textContent;
-        const program = createProgram(gl, vsSource, fsSource);
-        if (!program) return;
-
-        const programInfo = {
-          program,
-          attribLocations: {
-            vertexPosition: gl.getAttribLocation(program, "aVertexPosition"),
-            vertexColor: gl.getAttribLocation(program, "aVertexColor"),
-          },
-          uniformLocations: {
-            projectionMatrix: gl.getUniformLocation(
-              program,
-              "uProjectionMatrix"
-            ),
-            modelViewMatrix: gl.getUniformLocation(program, "uModelViewMatrix"),
-          },
-        };
-
-        // Init modular parts
-        const torso = MegaTorso.init(gl);
-        const legs = MegaLegs.init(gl);
-        const arms = MegaArms.init(gl);
-        const head = MegaHead.init(gl);
-
-        // Camera input
-        canvas.addEventListener("mousedown", (e) => {
-          isDragging = true;
-          lastMouseX = e.clientX;
-          lastMouseY = e.clientY;
-        });
-        canvas.addEventListener("mouseup", () => (isDragging = false));
-        canvas.addEventListener("mouseleave", () => (isDragging = false));
-        canvas.addEventListener("mousemove", (e) => {
-          if (!isDragging) return;
-          const dx = e.clientX - lastMouseX;
-          const dy = e.clientY - lastMouseY;
-          cameraRotationY += dx * 0.005;
-          cameraRotationX += dy * 0.005;
-          cameraRotationX = Math.max(
-            -Math.PI / 2,
-            Math.min(Math.PI / 2, cameraRotationX)
-          );
-          lastMouseX = e.clientX;
-          lastMouseY = e.clientY;
-        });
-        canvas.addEventListener(
-          "wheel",
-          (e) => {
-            e.preventDefault();
-            cameraZoomZ += e.deltaY * 0.01;
-            cameraZoomZ = Math.max(-30.0, Math.min(-4.0, cameraZoomZ));
-          },
-          { passive: false }
-        );
-
-        function render(nowMs) {
-          const now = nowMs * 0.001;
-          const dt = now - lastTime;
-          lastTime = now;
-
-          resize();
-
-          gl.clearColor(0.1, 1.5, 0.1, 1.0);
-          gl.clearDepth(1.0);
-          gl.enable(gl.DEPTH_TEST);
-          gl.depthFunc(gl.LEQUAL);
-          gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
-
-          const projectionMatrix = mat4.create();
-          mat4.perspective(
-            projectionMatrix,
-            (45 * Math.PI) / 180,
-            gl.canvas.clientWidth / gl.canvas.clientHeight,
-            0.1,
-            100.0
-          );
-
-          const view = mat4.create();
-          mat4.translate(view, view, [0, 0, cameraZoomZ]);
-          mat4.rotate(view, view, cameraRotationX, [1, 0, 0]);
-          mat4.rotate(view, view, cameraRotationY, [0, 1, 0]);
-
-          gl.useProgram(programInfo.program);
-          gl.uniformMatrix4fv(
-            programInfo.uniformLocations.projectionMatrix,
-            false,
-            projectionMatrix
-          );
-
-          // Draw modules
-          // 1) Torso at origin (its internal defaults scale/translate)
-          MegaTorso.draw(gl, programInfo, torso, view);
-
-          // 2) Head — offset above/forward of torso origin
-          const headRoot = mat4.clone(view);
-          // Tweak these to seat the head right on your torso
-          mat4.translate(headRoot, headRoot, [0.0, 1.55, 0.8]);
-          MegaHead.draw(gl, programInfo, head, headRoot);
-
-          // 3) Legs (use defaults relative to torso origin)
-          MegaLegs.draw(gl, programInfo, legs, view);
-
-          // 4) Arms (use defaults relative to torso origin)
-          MegaArms.draw(gl, programInfo, arms, view);
-
-          requestAnimationFrame(render);
-        }
-
-        requestAnimationFrame(render);
-      })();
+      // If you want manual control instead:
+      // const controller = createMegaSwampert("glCanvas");
+      // controller.renderOnce(); // draw single frame
+      // controller.start(); // start loop when ready
     </script>
   </body>
 </html>
