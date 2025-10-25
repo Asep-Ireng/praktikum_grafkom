@@ -66,9 +66,10 @@
       scale: [0.8, 3.35, 4.35],
     },
     finCap: {
-      translate: [0.0, -1.0, -6.2],
+      translate: [0.0, -0.2, -6.2],
       rotateX: 0.32,
-      scale: [1.3, 5.2, 5.7],
+      scale: [0.5, 5.8, 6.5],
+      // thickMul: 5.0
     },
 
     // Side fins (quarter blades). Left mirrors right by default.
@@ -120,9 +121,10 @@
     bulgeWidth: 0.24,
     controlPts: [
       [1.45, -2.5],
-      [1.55, -1.57],
-      [1.15, -0.8],
-      [1.15, -0.2],
+      [1.375, -1.45],
+      [1.30, -1.42],
+      [1.10, -0.8],
+      [1.10, -0.2],
       [1.3, 0.2],
       [1.4, 0.45],
       [0.95, 1.1],
@@ -208,13 +210,23 @@
       COLOR_FIN_DARK,
       CENTER_FIN_PARAMS
     );
+        // Fin cap thickness control:
+    // - options.finCap.thickness: absolute thickness
+    // - options.finCap.thickMul: multiplier over default (0.32)
+    const finCapDefaultThickness = 0.32;
+    const finCapThickness =
+      (options?.finCap?.thickness ??
+        (options?.finCap?.thickMul
+          ? finCapDefaultThickness * options.finCap.thickMul
+          : finCapDefaultThickness));
 
     const finCap = createHalfDiskExtrudedX(
       gl,
       COLOR_FIN_DARK,
       0.6,
-      0.22,
-      26,
+      finCapThickness,
+      26,{
+      extrudeAxis: "x"},
       options && options.finCapStretch
     );
 
