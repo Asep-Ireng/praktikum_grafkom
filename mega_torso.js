@@ -68,7 +68,7 @@
     finCap: {
       translate: [0.0, -0.2, -6.2],
       rotateX: 0.32,
-      scale: [0.5, 5.8, 6.5],
+      scale: [0.5, 5.8, 8.5],
       // thickMul: 5.0
     },
 
