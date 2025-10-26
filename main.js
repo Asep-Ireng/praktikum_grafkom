@@ -342,6 +342,77 @@ const swampertRoot = buildHeadGrouped(GL);
 
 console.log("Ball reference:", swampertBallGroupRef);
 
+// ==================== 🆕 SWAMPERT ANIMATION SETUP ====================
+console.log('Setting up Swampert animation references...');
+
+// ⭐ SIMPAN REFERENCE UNTUK BAGIAN TUBUH YANG MAU DIANIMASI
+let swampertAnimRefs = {
+    leftArm: null,
+    rightArm: null, 
+    leftLeg: null,
+    rightLeg: null,
+    tail: null,
+    head: null
+};
+
+// ⭐ FUNGSI UNTUK MENCARI BAGIAN TUBUH SWAMPERT
+function findSwampertParts(root) {
+    if (!root || !root.children) return;
+    
+    // Head group adalah child pertama dari root
+    const headGroup = root.children[0];
+    if (headGroup) {
+        swampertAnimRefs.head = headGroup;
+        
+        // Cari body group di dalam head group
+        for (const child of headGroup.children) {
+            if (child.children && child.children.length > 5) { // Body group punya banyak children
+                const bodyGroup = child;
+                
+                // Traverse body group untuk cari parts
+                for (const bodyChild of bodyGroup.children) {
+                    // Cari LEFT ARM (upperArmLGrp) - ada di shoulderLGrp
+                    if (bodyChild.children && bodyChild.children.length >= 2) {
+                        // Shoulder left -> child[1] adalah upperArmLGrp
+                        if (Math.abs(bodyChild.local[12] - (-0.55)) < 0.1) { // Posisi X ~ -0.55
+                            swampertAnimRefs.leftArm = bodyChild.children[1];
+                        }
+                        // Shoulder right -> child[1] adalah upperArmRGrp  
+                        if (Math.abs(bodyChild.local[12] - 0.55) < 0.1) { // Posisi X ~ 0.55
+                            swampertAnimRefs.rightArm = bodyChild.children[1];
+                        }
+                    }
+                    
+                    // Cari LEGS (legLGrp & legRGrp)
+                    if (Math.abs(bodyChild.local[12] - (-0.7)) < 0.1) { // Posisi X ~ -0.7
+                        swampertAnimRefs.leftLeg = bodyChild;
+                    }
+                    if (Math.abs(bodyChild.local[12] - 0.7) < 0.1) { // Posisi X ~ 0.7
+                        swampertAnimRefs.rightLeg = bodyChild;
+                    }
+                    
+                    // Cari TAIL (tailGrp) - posisi X ~ 0.2
+                    if (Math.abs(bodyChild.local[12] - 0.2) < 0.1) {
+                        swampertAnimRefs.tail = bodyChild;
+                    }
+                }
+            }
+        }
+    }
+    
+    console.log('🎯 Swampert Animation References Found:', {
+        leftArm: !!swampertAnimRefs.leftArm,
+        rightArm: !!swampertAnimRefs.rightArm, 
+        leftLeg: !!swampertAnimRefs.leftLeg,
+        rightLeg: !!swampertAnimRefs.rightLeg,
+        tail: !!swampertAnimRefs.tail,
+        head: !!swampertAnimRefs.head
+    });
+}
+
+// ⭐ PANGGIL FUNGSI UNTUK SETUP REFERENCES
+findSwampertParts(swampertRoot);
+
 // Posisikan Swampert di scene (misalnya di tengah)
 const SWAMPERT_MATRIX = LIBSSwampert.get_I4();  // ⭐ GANTI LIBS -> LIBSSwampert
 LIBSSwampert.translate(SWAMPERT_MATRIX, [-8, 3, 0]); // ⭐ GANTI LIBS -> LIBSSwampert
@@ -664,6 +735,33 @@ console.log("✅ Paraboloid water surface correctly positioned and rotated.");
                 console.log("🔄 Bola kembali ke depan mulut!");
             }
         }
+    }
+
+        // ==================== 🆕 ANIMASI TANGAN SWAMPERT ====================
+    if (swampertAnimRefs.leftArm && swampertAnimRefs.rightArm) {
+        const timeSec = time * 0.001;
+        const armSpeed = 1.5;
+        const armAmplitude = 0.15;
+        
+        // ⭐ ANIMASI TANGAN KIRI NAIK-TURUN
+        const leftArmRot = Math.sin(timeSec * armSpeed) * armAmplitude;
+        
+        // Reset matrix tangan kiri, apply posisi dasar + animasi
+        LIBSSwampert.set_I4(swampertAnimRefs.leftArm.local);
+        LIBSSwampert.translate(swampertAnimRefs.leftArm.local, [-0, 0, 1.80]);
+        LIBSSwampert.rotateX(swampertAnimRefs.leftArm.local, -0.15 + leftArmRot); // ⭐ INI ANIMASINYA!
+        LIBSSwampert.rotateY(swampertAnimRefs.leftArm.local, -0.10);
+        
+        // ⭐ ANIMASI TANGAN KANAN NAIK-TURUN (BERLAWANAN FASE)
+        const rightArmRot = Math.sin(timeSec * armSpeed + Math.PI) * armAmplitude;
+        
+        // Reset matrix tangan kanan, apply posisi dasar + animasi  
+        LIBSSwampert.set_I4(swampertAnimRefs.rightArm.local);
+        LIBSSwampert.translate(swampertAnimRefs.rightArm.local, [0, 0, 0.05]);
+        LIBSSwampert.rotateX(swampertAnimRefs.rightArm.local, -0.15 + rightArmRot); // ⭐ INI ANIMASINYA!
+        LIBSSwampert.rotateY(swampertAnimRefs.rightArm.local, 0.10);
+        
+        console.log("🔄 Swampert tangan animasi: LEFT=" + leftArmRot.toFixed(3) + ", RIGHT=" + rightArmRot.toFixed(3));
     }
 
       // ==================== ANIMASI PARABOLOID AIR MANCUR (DINAMIS) ====================
