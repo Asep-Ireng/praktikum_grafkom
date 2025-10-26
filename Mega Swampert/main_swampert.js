@@ -1,4 +1,4 @@
-// Mega Swampert/main.js
+// Mega Swampert/main_swampert.js
 
 import { Sky } from "../environment/sky.js";
 import { Ground, createPuddles } from "../environment/ground.js";
@@ -271,7 +271,7 @@ mega.setReflection({
 // Animation controller (Phase 0 idle to start)
 const rigs = mega.getRigs();
 const phases = createSwampertPhases(rigs, atkRig);
-phases.setPhase("attackAll");
+phases.setPhase("idle");
 let lastTime = 0;
 
 // Matrices via gl-matrix for sky and Mega view
