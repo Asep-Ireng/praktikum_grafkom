@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Environment + Mega Swampert</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <style>
+      html,
+      body {
+        margin: 0;
+        height: 100%;
+        overflow: hidden;
+        background: #111;
+      }
+      canvas {
+        display: block;
+        width: 100vw;
+        height: 100vh;
+        cursor: grab;
+      }
+    </style>
+
+    <!-- gl-matrix (global) -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/gl-matrix/2.8.1/gl-matrix-min.js"></script>
+
+    <!-- Matrix utils used by camera (defines LIBSMudkip) -->
+    <script src="./libsMudkip.js"></script>
+
+    <!-- Mega Swampert parts (globals) -->
+    <script src="./Mega%20Swampert/limbs/mega_torso.js"></script>
+    <script src="./Mega%20Swampert/limbs/mega_legs.js"></script>
+    <script src="./Mega%20Swampert/limbs/mega_arms.js"></script>
+    <script src="./Mega%20Swampert/limbs/mega_head.js"></script>
+  </head>
+  <body>
+    <canvas id="mycanvas"></canvas>
+
+    <!-- Entry (module) lives inside Mega Swampert folder -->
+    <script type="module" src="./Mega%20Swampert/main.js"></script>
+  </body>
+</html>
