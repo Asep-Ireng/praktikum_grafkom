@@ -1,0 +1,10 @@
+i wanna prepare this limb file for animation,
+ so export the groups, like forearm with upperarm,
+  or left arm, or just forearm, or just left finger
+ cluster, if there is already grouped objects in 
+ the file, you can use that, also export the pose 
+ functions, like translate,scale,rotate, etc for 
+ each groups in that file, then i can import those
+  functions in a separate animation file, 
+  then i can apply that animation file 
+  into the file i render the model in

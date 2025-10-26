@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>Mega Swampert — Scene</title>
+    <style>
+      html,
+      body {
+        margin: 0;
+        height: 100%;
+        overflow: hidden;
+        background: #111;
+      }
+      canvas {
+        display: block;
+        width: 100vw;
+        height: 100vh;
+      }
+    </style>
+  </head>
+  <body>
+    <canvas id="glCanvas"></canvas>
+
+    <!-- Dependencies: gl-matrix (UMD) and your modular parts -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/gl-matrix/2.8.1/gl-matrix-min.js"></script>
+    <script src="./limbs/mega_torso.js"></script>
+    <script src="./limbs/mega_legs.js"></script>
+    <script src="./limbs/mega_arms.js"></script>
+    <script src="./limbs/mega_head.js"></script>
+
+    <!-- Import the module and start rendering -->
+    <script type="module">
+      import {
+        renderMegaSwampert,
+        // or: createMegaSwampert
+      } from "./mega_swampert_scene.js";
+
+      // Easiest: start the loop immediately
+      const controller = renderMegaSwampert("glCanvas", {
+        attachControls: true,
+        autoResize: true,
+        initialZoomZ: -9.0,
+      });
+
+      // Example: adjust camera later
+      // controller.setCamera({ rotX: 0.2, rotY: 0.6, zoomZ: -10 });
+
+      // If you want manual control instead:
+      // const controller = createMegaSwampert("glCanvas");
+      // controller.renderOnce(); // draw single frame
+      // controller.start(); // start loop when ready
+    </script>
+  </body>
+</html>

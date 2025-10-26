@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Mudkip & Marshtomp</title>
+  <style>
+    body { margin: 0; overflow: hidden; }
+    canvas { display: block; width: 100vw; height: 100vh; }
+  </style>
+</head>
+<body>
+  <canvas id="mycanvas"></canvas>
+  
+  <!-- ✅ LOAD LIBS sebagai GLOBAL SCRIPT (non-module) -->
+  <script src="libsMudkip.js"></script>
+  <script src="libsMarshtomp.js"></script>
+  
+  <!-- ✅ LOAD MAIN sebagai ES6 MODULE -->
+  <script type="module" src="main.js"></script>
+</body>
+</html>
