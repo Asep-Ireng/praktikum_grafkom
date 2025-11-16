@@ -1269,7 +1269,7 @@ export function applyPhaseAll_AttackSequenceLoop(
     trY(rigs.torso?.belly, -0.1 * scale);
 
     rotY(rigs.arms?.left?.forearm, deg(-10) * scale);
-    rotY(rigs.arms?.right?.forearm, deg(+10) * scale);
+    rotY(rigs.arms?.right?.forearm, deg(5) * scale);
     rotY(rigs.arms?.left?.lowerRotateWS, deg(+20) * scale);
     rotY(rigs.arms?.right?.lowerRotateWS, deg(-20) * scale);
     rotX(rigs.arms?.left?.lowerRotateWS, deg(+25) * scale);
@@ -1318,13 +1318,22 @@ export function applyPhaseAll_AttackSequenceLoop(
     rotX(rigs.torso?.belly, deg(lerp(0, -30, cB)));
 
     const cA = clamp01(easeInOutSine(tt / dur));
+    // trY(rigs.arms?.left?.liftWS, 3.0 * cA);
+    // trX(rigs.arms?.left?.liftWS, -0.8 * cA);
+    // rotX(rigs.arms?.left?.rotateWS, deg(-60) * cA);
+    // rotY(rigs.arms?.left?.lowerRotateWS, deg(-40) * cA);
+    // rotX(rigs.arms?.left?.lowerRotateWS, deg(-40) * cA);
+    // trZ(rigs.arms?.left?.lowerLiftWS, 1.5 * cA);
+    // rotX(rigs.arms?.left?.forearm, deg(85) * cA);
+    // trX(rigs.arms?.left?.forearm, -0.4 * cA);
+    // rotX(rigs.arms?.left?.fingers?.cluster, deg(120) * cA);
     trY(rigs.arms?.left?.liftWS, 3.0 * cA);
-    trX(rigs.arms?.left?.liftWS, -0.8 * cA);
+    trX(rigs.arms?.lowerLiftWS?.liftWS, -0.8 * cA);
     rotX(rigs.arms?.left?.rotateWS, deg(-60) * cA);
     rotY(rigs.arms?.left?.lowerRotateWS, deg(-40) * cA);
     rotX(rigs.arms?.left?.lowerRotateWS, deg(-40) * cA);
     trZ(rigs.arms?.left?.lowerLiftWS, 1.5 * cA);
-    rotX(rigs.arms?.left?.forearm, deg(55) * cA);
+    rotX(rigs.arms?.left?.forearm, deg(85) * cA);
     rotX(rigs.arms?.left?.fingers?.cluster, deg(120) * cA);
 
     trY(rigs.arms?.right?.liftWS, 3.0 * cA);
@@ -1333,7 +1342,7 @@ export function applyPhaseAll_AttackSequenceLoop(
     rotY(rigs.arms?.right?.lowerRotateWS, deg(40) * cA);
     rotX(rigs.arms?.right?.lowerRotateWS, deg(-40) * cA);
     trZ(rigs.arms?.right?.lowerLiftWS, 1.5 * cA);
-    rotX(rigs.arms?.right?.forearm, deg(55) * cA);
+    rotX(rigs.arms?.right?.forearm, deg(85) * cA);
     rotX(rigs.arms?.right?.fingers?.cluster, deg(120) * cA);
 
     hideBoulder();
@@ -1411,7 +1420,7 @@ export function applyPhaseAll_AttackSequenceLoop(
 
     const cA = easeInCubic(clamp01(t2 + 0.2 / 0.2));
     rotY(rigs.arms?.left?.forearm, deg(-10) * cA);
-    rotY(rigs.arms?.right?.forearm, deg(+10) * cA);
+    rotY(rigs.arms?.right?.forearm, deg(5) * cA);
     rotY(rigs.arms?.left?.lowerRotateWS, deg(+20) * cA);
     rotY(rigs.arms?.right?.lowerRotateWS, deg(-20) * cA);
     rotX(rigs.arms?.left?.lowerRotateWS, deg(+25) * cA);
