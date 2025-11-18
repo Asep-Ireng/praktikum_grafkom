@@ -230,7 +230,7 @@ function main() {
     const puddlesToUse = veryManyPuddles; // Ganti sesuai keinginan
 
     const ground = new Ground(GL, SHADER_PROGRAM, _position, _color, _normal, _Mmatrix, {
-        radius: 35,
+        radius: 50,
         cliffHeight: 1.5,
         segments: 64,
         noiseAmplitude: 0.3,
