@@ -1,22 +1,17 @@
 export class Water {
   GL = null;
   SHADER_PROGRAM = null;
-  
   _position = null;
   _color = null;
   _normal = null;
   _MMatrix = null;
-  
   OBJECT_VERTEX = null;
   OBJECT_FACES = null;
-  
   vertex = [];
   faces = [];
-  
   POSITION_MATRIX = LIBSMudkip.get_I4();
   MOVE_MATRIX = LIBSMudkip.get_I4();
   MODEL_MATRIX = LIBSMudkip.get_I4();
-
   waveTime = 0;
 
   constructor(GL, SHADER_PROGRAM, _position, _color, _normal, _Mmatrix, opts = {}) {
@@ -26,43 +21,27 @@ export class Water {
     this._color = _color;
     this._normal = _normal;
     this._MMatrix = _Mmatrix;
-
-    // --- MASSIVE SIZE UPDATE ---
-    this.size = opts.size ?? 600; // Covers the horizon
+    this.size = opts.size ?? 600;
     this.waterLevel = opts.waterLevel ?? -2.2; 
-    this.segments = Math.max(64, opts.segments ?? 128); // More geometry
-    
-    // Tropical Aesthetic Colors
-    this.shallowColor = opts.shallowColor ?? [0.2, 0.7, 0.85]; // Cyan/Turquoise
-    this.deepColor = opts.deepColor ?? [0.05, 0.2, 0.45];      // Deep Navy
-    
-    // Slower, larger rolling waves
+    this.segments = Math.max(64, opts.segments ?? 128);
+    this.shallowColor = opts.shallowColor ?? [0.2, 0.7, 0.85];
+    this.deepColor = opts.deepColor ?? [0.05, 0.2, 0.45];
     this.waveAmplitude = opts.waveAmplitude ?? 0.35; 
     this.waveFrequency = opts.waveFrequency ?? 0.8;
     this.waveScale = opts.waveScale ?? 0.15; 
-
     this._buildWaterPlane();
-  }
-
-  _noise2D(x, z, time) {
-    const seed1 = Math.sin(x * 0.5 + z * 0.4 + time * 0.5) * 43758.5453;
-    return (seed1 - Math.floor(seed1)) * 2.0 - 1.0;
   }
 
   _getWaveHeight(x, z, time = 0) {
     let height = 0;
-    // Large swell
     height += Math.sin(x * this.waveScale + time * this.waveFrequency) * Math.cos(z * this.waveScale * 0.8 + time * this.waveFrequency * 0.9) * this.waveAmplitude;
-    // Detail wave
     height += Math.sin(x * this.waveScale * 3.0 + time) * 0.1;
     return height;
   }
 
   _getColorAtPosition(x, z) {
     const dist = Math.sqrt(x * x + z * z);
-    // Gradient starts fading to deep blue after 50 units
     let t = Math.min(Math.max((dist - 40) / 100, 0.0), 1.0);
-    
     return [
       this.shallowColor[0] * (1 - t) + this.deepColor[0] * t,
       this.shallowColor[1] * (1 - t) + this.deepColor[1] * t,
@@ -106,7 +85,6 @@ export class Water {
     const cols = this.segments + 1;
     const GL = this.GL;
 
-    // Only update a subset of vertices if performance lags, but for now update all
     for (let i = 0; i <= this.segments; i++) {
       for (let j = 0; j <= this.segments; j++) {
         const idx = (i * cols + j) * 9;
@@ -116,20 +94,12 @@ export class Water {
         const waveY = this._getWaveHeight(x, z, this.waveTime);
         this.vertex[idx + 1] = this.waterLevel + waveY;
         
-        // Quick normal calc
         const d = 0.5;
         const hx = this._getWaveHeight(x + d, z, this.waveTime) - waveY;
         const hz = this._getWaveHeight(x, z + d, this.waveTime) - waveY;
-        const v1 = [d, hx, 0];
-        const v2 = [0, hz, d];
-        // Cross product
-        let nx = v1[1]*v2[2] - v1[2]*v2[1];
-        let ny = v1[2]*v2[0] - v1[0]*v2[2]; // Standard UP usually
-        let nz = v1[0]*v2[1] - v1[1]*v2[0];
-        // Flip/Normalize
-        ny = 1.0; 
-        nx = -hx; // Approximate
-        nz = -hz;
+        let nx = -hx;
+        let ny = 1.0; 
+        let nz = -hz;
         const len = Math.hypot(nx, ny, nz);
         
         this.vertex[idx + 3] = nx/len;
@@ -137,7 +107,6 @@ export class Water {
         this.vertex[idx + 5] = nz/len;
       }
     }
-    
     GL.bindBuffer(GL.ARRAY_BUFFER, this.OBJECT_VERTEX);
     GL.bufferData(GL.ARRAY_BUFFER, new Float32Array(this.vertex), GL.DYNAMIC_DRAW);
   }
@@ -161,8 +130,10 @@ export class Water {
 
     GL.useProgram(this.SHADER_PROGRAM);
     GL.uniformMatrix4fv(this._MMatrix, false, this.MODEL_MATRIX);
+    
     const normalMat3 = LIBSMudkip.get_normal_matrix(this.MODEL_MATRIX);
-    GL.uniformMatrix3fv(GL.getUniformLocation(this.SHADER_PROGRAM, "normalMatrix"), false, normalMat3);
+    const uNormalMatrix = GL.getUniformLocation(this.SHADER_PROGRAM, "normalMatrix");
+    if(uNormalMatrix) GL.uniformMatrix3fv(uNormalMatrix, false, normalMat3);
 
     GL.bindBuffer(GL.ARRAY_BUFFER, this.OBJECT_VERTEX);
     GL.vertexAttribPointer(this._position, 3, GL.FLOAT, false, 36, 0);

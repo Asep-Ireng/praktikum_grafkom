@@ -5,7 +5,7 @@ import { Ground, createPuddles } from "../environment/ground.js";
 import { Water } from "../environment/water.js";
 import { Rock } from "../environment/rock.js";
 import { Waterfall } from "../environment/waterfall.js";
-import { PalmTree } from "../environment/palm_tree.js"; // NEW IMPORT
+import { PalmTree } from "../environment/palm_tree.js"; 
 import { createMegaSwampertModel } from "./mega_swampert_model.js";
 import { createEnvShaders } from "../environment/shaders.js";
 import { createSwampertPhases } from "./anim/mega_animation.js";
@@ -37,7 +37,7 @@ GL.clearColor(0.5, 0.5, 0.5, 1.0);
 
 GL.cullFace(GL.BACK);
 
-// Build global environment shader
+// Build global environment shader (New simplified shader)
 const env = createEnvShaders(GL);
 const ENV_PROG = env.program;
 const { position: aPos, color: aCol, normal: aNor } = env.attribs;
@@ -46,30 +46,27 @@ const {
   Vmatrix: uV,
   Mmatrix: uM,
   normalMatrix: uN,
-  viewPos: uViewPos,
-  uSunDir, uSunColor,
-  uSkyUpColor, uSkyDownColor, uAmbientStrength,
-  uBaseColor, uReflectivityBase, uReflectFlatBias, uRoughness,
-  uRimStrength, uRimColor,
-  uUseEnvMap, uEnvMap, 
+  uCameraPos: uViewPos, // Renamed to match shader
+  
+  // New Lighting Uniforms
+  uLightDir1, uLightCol1,
+  uLightDir2, uLightCol2,
+  uAmbient, uDiffuse, uSpecular, uShininess
 } = env.uniforms;
 
+// --- GLOBAL LIGHTING SETTINGS (Same as Model) ---
 GL.useProgram(ENV_PROG);
-GL.uniform3f(uSunDir, -0.3, -1.0, -0.15);
-GL.uniform3f(uSunColor, 1.0, 0.92, 0.78);
-GL.uniform3f(uSkyUpColor, 0.58, 0.74, 0.96);
-GL.uniform3f(uSkyDownColor, 0.24, 0.2, 0.16);
-GL.uniform1f(uAmbientStrength, 0.16);
-GL.uniform3f(uBaseColor, 1.0, 1.0, 1.0);
-GL.uniform1f(uReflectivityBase, 0.02);
-GL.uniform1f(uReflectFlatBias, 0.1); 
-GL.uniform1f(uRoughness, 0.88); 
-GL.uniform1f(uRimStrength, 0.08);
-GL.uniform3f(uRimColor, 1.0, 1.0, 1.0);
-GL.uniform1i(uUseEnvMap, 0);
+GL.uniform3f(uLightDir1, -0.35, 0.80, -0.55); // Main Sun
+GL.uniform3f(uLightCol1, 1.00, 1.00, 1.00);   // White
+GL.uniform3f(uLightDir2, 0.40, -0.20, 0.60);  // Backlight
+GL.uniform3f(uLightCol2, 0.70, 0.80, 1.00);   // Cool Blue
+GL.uniform1f(uAmbient, 0.45);
+GL.uniform1f(uDiffuse, 0.70);
+GL.uniform1f(uSpecular, 0.15); // Lower specular for ground (less shiny)
+GL.uniform1f(uShininess, 10.0); // Softer shine
 
 // Camera
-let cameraPosition = [0, 15, 80]; // Zoomed out further for big island
+let cameraPosition = [0, 15, 80]; 
 let cameraFront = [0, 0, -1];
 let cameraUp = [0, 1, 0];
 let yaw = -90.0;
@@ -134,64 +131,39 @@ const sky = new Sky(GL, { texturePath: "../environment/skybox.jpg" });
 sky.setup();
 
 // --- 2. BIGGER ISLAND (Radius 65) ---
-// Puddles must now cover 65 radius
 const puddles = createPuddles(60, 65, 12345, {
-  minRadius: 1.5,
-  maxRadius: 4.0,
-  minDistFromCenter: 3.0,
-  maxDistFromCenter: 65 * 0.85, 
-  minDistBetweenPuddles: 2.5,
+  minRadius: 1.5, maxRadius: 4.0, minDistFromCenter: 3.0,
+  maxDistFromCenter: 65 * 0.85, minDistBetweenPuddles: 2.5,
 });
 
 const ground = new Ground(GL, ENV_PROG, aPos, aCol, aNor, uM, {
-  radius: 65,           // EXPANDED
-  cliffHeight: 2.5,
-  segments: 128,       
-  noiseAmplitude: 0.7,  
-  topColor: [0.82, 0.74, 0.55], 
-  puddles,
+  radius: 65, cliffHeight: 2.5, segments: 128, noiseAmplitude: 0.7,  
+  topColor: [0.82, 0.74, 0.55], puddles,
 });
 ground.setup();
 
 // --- 3. BIGGER WATER ---
 const water = new Water(GL, ENV_PROG, aPos, aCol, aNor, uM, {
-  size: 900,            // HUGE
-  waterLevel: -2.2,
-  waveAmplitude: 0.35,
-  waveScale: 0.15,      
-  segments: 128,
-  shallowColor: [0.2, 0.7, 0.85],
-  deepColor: [0.05, 0.2, 0.45],
+  size: 900, waterLevel: -2.2, waveAmplitude: 0.35, waveScale: 0.15, segments: 128,
+  shallowColor: [0.2, 0.7, 0.85], deepColor: [0.05, 0.2, 0.45],
 });
 water.setup();
 
-// --- 4. MORE ROCKS (Radius 65) ---
+// --- 4. MORE ROCKS ---
 const rocks = new Rock(GL, ENV_PROG, aPos, aCol, aNor, uM, {
-  groundRadius: 65,     // MATCH GROUND
-  numClusters: 18,      // MORE CLUSTERS
-  numScattered: 80,     // MORE ROCKS (Doubled)
-  puddles,
-  seed: 98765,
+  groundRadius: 65, numClusters: 18, numScattered: 80, puddles, seed: 98765,
 });
 rocks.setup();
 
-// --- 5. TREES (New) ---
+// --- 5. TREES ---
 const trees = new PalmTree(GL, ENV_PROG, aPos, aCol, aNor, uM, {
-  islandRadius: 65,
-  numTrees: 12,         // Added trees
-  seed: 456
+  islandRadius: 65, numTrees: 12, seed: 456
 });
 
 // --- 6. MOVED WATERFALL ---
 const waterfall = new Waterfall(GL, ENV_PROG, aPos, aCol, aNor, uM, {
-  centerZ: -80,         // PUSHED BACK to accommodate island
-  width: 200,           // WIDER
-  height: 55,           // TALLER
-  curveDepth: 45,      
-  waterLevel: -2.2,
-  numStreams: 9,
-  streamWidth: 4.0,
-  seed: 54321,
+  centerZ: -80, width: 200, height: 55, curveDepth: 45, waterLevel: -2.2,
+  numStreams: 9, streamWidth: 4.0, seed: 54321,
 });
 waterfall.setup();
 
@@ -209,16 +181,12 @@ const atk = AttackAssets.init(GL, {
 const atkPose = AttackAssets.createPose();
 const atkRig = AttackAssets.makePoseAPI(atkPose);
 
-mega.setReflection({
-  reflectivity: 0.0, 
-  rimStrength: 0.2, 
-  skyUpColor: [0.58, 0.74, 0.96], 
-  skyDownColor: [0.24, 0.2, 0.16], 
-});
+// Note: setReflection is now ignored by the shader, but kept for logic
+mega.setReflection({ reflectivity: 0.0 });
 
 const rigs = mega.getRigs();
 const phases = createSwampertPhases(rigs, atkRig);
-phases.setPhase("idle");
+phases.setPhase("attackAll");
 let lastTime = 0;
 
 const mat4 = (globalThis.glMatrix && glMatrix.mat4) || globalThis.mat4;
@@ -237,6 +205,7 @@ function animate(time) {
   ];
   const viewMatrix = LIBSMudkip.lookAt(cameraPosition, lookAt, cameraUp);
 
+  // --- DRAW ENVIRONMENT ---
   GL.useProgram(ENV_PROG);
   GL.uniformMatrix4fv(uP, false, PROJ);
   GL.uniformMatrix4fv(uV, false, viewMatrix);
@@ -249,14 +218,14 @@ function animate(time) {
   GL.enableVertexAttribArray(aCol);
   GL.enableVertexAttribArray(aNor);
 
-  // Render Scene
+  // Sky
   const skyModel = mat4.create();
   mat4.rotateY(skyModel, skyModel, time * 0.00002);
   sky.render(PROJ, viewMatrix, skyModel);
 
   ground.render(MODEL_I);
   rocks.render(MODEL_I);
-  trees.render(MODEL_I); // RENDER TREES
+  trees.render(MODEL_I);
   water.updateWaves(time);
   water.render(MODEL_I);
   waterfall.updateAnimation(time);
@@ -265,15 +234,14 @@ function animate(time) {
   const dt = lastTime === 0 ? 0 : (time - lastTime) * 0.001;
   lastTime = time;
   
+  // Update Animation
   const HEAD_OFFSET = [0.0, 1.55, 0.8];
   const M = mega.getModelMatrix();
-
   const headPos = [
     M[12] + M[0] * HEAD_OFFSET[0] + M[4] * HEAD_OFFSET[1] + M[8] * HEAD_OFFSET[2],
     M[13] + M[1] * HEAD_OFFSET[0] + M[5] * HEAD_OFFSET[1] + M[9] * HEAD_OFFSET[2],
     M[14] + M[2] * HEAD_OFFSET[0] + M[6] * HEAD_OFFSET[1] + M[10] * HEAD_OFFSET[2],
   ];
-
   function norm(v) {
     const L = Math.hypot(v[0], v[1], v[2]) || 1;
     return [v[0] / L, v[1] / L, v[2] / L];
@@ -284,7 +252,11 @@ function animate(time) {
   phases.setAnchors({ headPos, headFwd, headRight });
   phases.update(dt);
 
+  // --- DRAW MEGA SWAMPERT ---
+  // Draw Mega
   mega.draw(PROJ, viewMatrix);
+  
+  // Draw Attack
   GL.useProgram(mega.programInfo.program);
   AttackAssets.draw(GL, mega.programInfo, atk, viewMatrix, undefined, atkPose);
 

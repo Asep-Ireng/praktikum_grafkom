@@ -1,24 +1,17 @@
-// environment/palm_tree.js
-
 export class PalmTree {
   GL = null;
   SHADER_PROGRAM = null;
-
   _position = null;
   _color = null;
   _normal = null;
   _MMatrix = null;
-
   vertex = [];
   faces = [];
-  
   VERTEX_BUFFER = null;
   FACES_BUFFER = null;
-
   POSITION_MATRIX = LIBSMudkip.get_I4();
   MOVE_MATRIX = LIBSMudkip.get_I4();
   MODEL_MATRIX = LIBSMudkip.get_I4();
-
   trees = [];
   _seed = 123;
 
@@ -29,16 +22,12 @@ export class PalmTree {
     this._color = _color;
     this._normal = _normal;
     this._MMatrix = _Mmatrix;
-
     this.islandRadius = opts.islandRadius ?? 65;
     this.numTrees = opts.numTrees ?? 8;
     this._seed = opts.seed ?? 456;
-
-    // Colors
-    this.trunkColor = [0.55, 0.40, 0.25]; // Wood brown
-    this.leafColor = [0.15, 0.60, 0.10];  // Palm green
-    this.coconutColor = [0.25, 0.15, 0.05]; // Dark brown
-
+    this.trunkColor = [0.55, 0.40, 0.25];
+    this.leafColor = [0.15, 0.60, 0.10];
+    this.coconutColor = [0.25, 0.15, 0.05];
     this._generateTrees();
     this.setup();
   }
@@ -51,52 +40,37 @@ export class PalmTree {
 
   _generateTrees() {
     const count = this.numTrees;
-    
     for(let i=0; i<count; i++) {
-        // Place on island, scattering them away from the center
         const angle = this._seededRandom() * Math.PI * 2;
-        // Place between 25% and 90% of the radius
         const r = this._random(15, this.islandRadius * 0.9); 
-        
         const x = Math.cos(angle) * r;
         const z = Math.sin(angle) * r;
-        const y = 0; // On ground
-        
+        const y = 0; 
         const height = this._random(9, 15);
-        const leanX = this._random(-4, 4); // Random lean direction
+        const leanX = this._random(-4, 4); 
         const leanZ = this._random(-4, 4);
-        
         this._buildSingleTree(x, y, z, height, leanX, leanZ);
     }
   }
 
   _buildSingleTree(x, y, z, h, leanX, leanZ) {
-    // 1. Trunk (Segmented Cylinder)
     const segments = 7; 
     const rings = 10;
     const baseR = 0.7;
     const topR = 0.4;
     const vOffset = this.vertex.length / 9;
     
-    // Generate trunk vertices
     for(let i=0; i<=rings; i++) {
         const v = i/rings;
         const ringY = y + v * h;
-        
-        // Curve the trunk using a quadratic curve
         const curveX = x + (leanX * v * v); 
         const curveZ = z + (leanZ * v * v);
-        
         const r = baseR * (1-v) + topR * v;
-        
         for(let j=0; j<=segments; j++) {
             const u = j/segments;
             const theta = u * Math.PI * 2;
-            
             const px = Math.cos(theta) * r;
             const pz = Math.sin(theta) * r;
-            
-            // Simple normal approximation (pointing out)
             this.vertex.push(
                 curveX + px, ringY, curveZ + pz,
                 Math.cos(theta), 0, Math.sin(theta), 
@@ -104,8 +78,6 @@ export class PalmTree {
             );
         }
     }
-    
-    // Trunk Faces
     for(let i=0; i<rings; i++) {
         for(let j=0; j<segments; j++) {
             const start = vOffset + i*(segments+1) + j;
@@ -114,19 +86,14 @@ export class PalmTree {
             this.faces.push(start+1, next, next+1);
         }
     }
-
-    // 2. Palm Fronds (Leaves) at the top
     const topX = x + leanX;
     const topZ = z + leanZ;
     const topY = y + h;
     const numFronds = 8;
-    
     for(let i=0; i<numFronds; i++) {
         const angle = (i/numFronds) * Math.PI * 2 + this._random(0, 0.5);
         this._buildFrond(topX, topY, topZ, angle);
     }
-
-    // 3. Coconuts (small spheres under leaves)
     for(let i=0; i<3; i++) {
         const angle = (i/3) * Math.PI * 2;
         this._buildCoconut(topX + Math.cos(angle)*0.5, topY - 0.4, topZ + Math.sin(angle)*0.5);
@@ -137,37 +104,19 @@ export class PalmTree {
       const length = this._random(7, 10);
       const segs = 6;
       const vOff = this.vertex.length / 9;
-      const wid = 0.9; // Leaf width
-
-      // A frond is a curved strip
+      const wid = 0.9; 
       for(let i=0; i<=segs; i++) {
           const t = i/segs;
-          
-          // Arch logic: Go up slightly then droop down significantly
           const dist = t * length;
           const lift = Math.sin(t * Math.PI) * 1.5 - (t*t*4.0); 
-          
           const fx = ox + Math.cos(angle) * dist;
           const fz = oz + Math.sin(angle) * dist;
           const fy = oy + lift;
-
           const nx = -Math.sin(angle);
           const nz = Math.cos(angle);
-          
-          // Left vertex
-          this.vertex.push(
-              fx - nx*wid*(1-t), fy, fz - nz*wid*(1-t),
-              0, 1, 0,
-              this.leafColor[0], this.leafColor[1], this.leafColor[2]
-          );
-          // Right vertex
-          this.vertex.push(
-              fx + nx*wid*(1-t), fy, fz + nz*wid*(1-t),
-              0, 1, 0,
-              this.leafColor[0], this.leafColor[1], this.leafColor[2]
-          );
+          this.vertex.push(fx - nx*wid*(1-t), fy, fz - nz*wid*(1-t), 0, 1, 0, this.leafColor[0], this.leafColor[1], this.leafColor[2]);
+          this.vertex.push(fx + nx*wid*(1-t), fy, fz + nz*wid*(1-t), 0, 1, 0, this.leafColor[0], this.leafColor[1], this.leafColor[2]);
       }
-
       for(let i=0; i<segs; i++) {
           const base = vOff + i*2;
           this.faces.push(base, base+2, base+1);
@@ -179,7 +128,6 @@ export class PalmTree {
       const r = 0.35;
       const segs = 5; const rings=5; 
       const vOff = this.vertex.length/9;
-      
       for(let i=0; i<=rings; i++) {
           const v = i/rings;
           const phi = v * Math.PI;
@@ -203,14 +151,12 @@ export class PalmTree {
   }
 
   setup() {
-    const GL = this.GL;
-    this.VERTEX_BUFFER = GL.createBuffer();
-    GL.bindBuffer(GL.ARRAY_BUFFER, this.VERTEX_BUFFER);
-    GL.bufferData(GL.ARRAY_BUFFER, new Float32Array(this.vertex), GL.STATIC_DRAW);
-
-    this.FACES_BUFFER = GL.createBuffer();
-    GL.bindBuffer(GL.ELEMENT_ARRAY_BUFFER, this.FACES_BUFFER);
-    GL.bufferData(GL.ELEMENT_ARRAY_BUFFER, new Uint16Array(this.faces), GL.STATIC_DRAW);
+    this.VERTEX_BUFFER = this.GL.createBuffer();
+    this.GL.bindBuffer(this.GL.ARRAY_BUFFER, this.VERTEX_BUFFER);
+    this.GL.bufferData(this.GL.ARRAY_BUFFER, new Float32Array(this.vertex), this.GL.STATIC_DRAW);
+    this.FACES_BUFFER = this.GL.createBuffer();
+    this.GL.bindBuffer(this.GL.ELEMENT_ARRAY_BUFFER, this.FACES_BUFFER);
+    this.GL.bufferData(this.GL.ELEMENT_ARRAY_BUFFER, new Uint16Array(this.faces), this.GL.STATIC_DRAW);
   }
 
   render(PARENT_MATRIX) {
@@ -222,7 +168,8 @@ export class PalmTree {
 
     GL.useProgram(this.SHADER_PROGRAM);
     const normalMat3 = LIBSMudkip.get_normal_matrix(this.MODEL_MATRIX);
-    GL.uniformMatrix3fv(GL.getUniformLocation(this.SHADER_PROGRAM, "normalMatrix"), false, normalMat3);
+    const uNormalMatrix = GL.getUniformLocation(this.SHADER_PROGRAM, "normalMatrix");
+    if(uNormalMatrix) GL.uniformMatrix3fv(uNormalMatrix, false, normalMat3);
     GL.uniformMatrix4fv(this._MMatrix, false, this.MODEL_MATRIX);
 
     GL.bindBuffer(GL.ARRAY_BUFFER, this.VERTEX_BUFFER);
